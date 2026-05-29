@@ -1,0 +1,111 @@
+# Agent Notes — remindly
+
+## Project Status
+
+This repo is in early scaffolding. No `package.json` or `src/` yet. The authoritative spec lives in:
+
+- `interview/event-query-api-admin.md` — product requirements & Q&A
+- `.opencode/plans/plan-event-query-api-admin.md` — implementation plan, schema, route map
+
+Trust the plan over any ad-hoc guesses when generating code.
+
+## Tech Stack & Conventions
+
+| Layer | Choice | Rationale |
+|-------|--------|-----------|
+| Runtime | Node.js 20+ | |
+| DB | SQLite via `better-sqlite3` | **Synchronous API** — do not add async/await wrappers around DB calls |
+| Templating | EJS | Not Pug; HTML-like syntax for admin forms |
+| Sessions | `express-session` | |
+| Password hashing | `bcrypt` | Hash the single admin password at boot, never store in DB |
+| CSRF | `csurf` | Required on all admin POST/PUT/DELETE |
+| Styling | Inline CSS / minimal stylesheet | No CSS framework |
+
+## Directory Layout (planned)
+
+```
+src/
+  index.js              # Express app bootstrap, middleware wiring
+  db/connection.js      # better-sqlite3 singleton + schema setup
+  middleware/
+    auth.js             # session config + admin guard
+    apiKey.js           # x-api-key header validation
+  routes/
+    public.js           # GET / (HTML), GET /api/events (JSON)
+    admin.js            # login/logout + event CRUD
+  views/
+    layout.ejs
+    public/index.ejs
+    admin/login.ejs
+    admin/dashboard.ejs
+    admin/eventForm.ejs
+  utils/dateMath.js     # alias resolver + recurring-event matcher
+```
+
+## Environment Variables (all required at runtime)
+
+| Variable | Purpose |
+|----------|---------|
+| `ADMIN_USERNAME` | Single built-in admin login |
+| `ADMIN_PASSWORD` | Plaintext at deploy; hashed in-memory at boot |
+| `API_KEYS` | Comma-separated valid API keys for public API |
+| `PORT` | Default `3000` |
+| `NODE_ENV` | `development` or `production` |
+
+`.env` files are gitignored. There is no `.env.example` yet.
+
+## Database Schema (single table)
+
+- `events` — `id`, `title`, `description`, `category` (CHECK: `Birthday`, `Name Day`, `Flag Day`, `Holiday`, `Anniversary`), `is_recurring` (0 or 1), `month`/`day` (for recurring), `event_date` (YYYY-MM-DD for one-time), `created_at`, `updated_at`
+- **No `users` table.** Admin is env-only.
+- Invariant: `is_recurring=1` → `month`+`day` set, `event_date` null; `is_recurring=0` → opposite.
+
+## API Behavior
+
+- `GET /api/events` requires `x-api-key` header validated against `API_KEYS`.
+- Query params: `date` (YYYY-MM-DD), `alias` (`today` | `tomorrow` | `next_week`), `category`.
+- `next_week` = Monday–Sunday of the week starting 7 days from today.
+- Response envelope: `{ date: "YYYY-MM-DD", events: [...] }`
+- Recurring events match by `(month, day)` projected onto the query year; one-time events match `event_date` directly.
+- SQL approach: **two separate queries** (recurring + fixed) concatenated in JS. Do not try to unify them into one clever SQL query.
+
+## Admin Routes & Auth
+
+- All `/admin/*` (except `/admin/login`) require session cookie.
+- Login POST validates against bcrypt hash of env password.
+- Logout POST destroys session.
+- CRUD: `GET/POST /admin/events`, `GET/PUT/DELETE /admin/events/:id`
+- Forms are server-rendered EJS with CSRF tokens.
+
+## Code Quality
+
+| Tool | Scope | Notes |
+|------|-------|-------|
+| **ESLint** | JS source (`src/`) | `eslint-config-prettier` must be included so Prettier owns formatting |
+| **Prettier** | JS + EJS + CSS | Single source of truth for formatting; run before commits |
+| **lint-staged** | Pre-commit | ESLint + Prettier on staged files only |
+
+**Commands (to add to `package.json` scripts):**
+
+```bash
+npm run lint      # eslint src/
+npm run format    # prettier --write src/ views/
+npm test          # once test suite is added (jest/mocha TBD in plan)
+```
+
+Run `lint -> format -> test` before pushing. CI should enforce the same order.
+
+## Dev Commands (to create once scaffolding exists)
+
+```bash
+npm install
+node src/index.js          # dev server
+```
+
+## Gotchas
+
+- **better-sqlite3 is sync.** Avoid `async/await` around DB calls; use `.prepare().all()` / `.run()` directly.
+- EJS auto-escapes output; do not disable escaping on user-provided fields.
+- Date range queries for recurring events must handle December→January year-wrap when `next_week` spans the boundary.
+- Admin credentials live **only** in env vars — never seed a users table or hardcode defaults.
+- API keys are env-only — no key management UI.
