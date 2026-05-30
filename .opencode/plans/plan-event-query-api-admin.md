@@ -88,13 +88,29 @@ NODE_ENV          # development | production
 |--------|------|------|-------------|
 | GET | `/api/events` | API key required | Query events. Params: `date` (YYYY-MM-DD), `alias` (today\|tomorrow\|next_week), `category` |
 
-Alias `next_week` returns events for the 7-day window starting from the Monday of the current week (or "next week" relative to today).
+Validation and payload rules:
+
+* If both `date` and `alias` are provided, return `400`.
+* `today`, `tomorrow`, and `next_week` are resolved in timezone `Europe/Helsinki`.
+* `next_week` returns a date-range payload.
 
 Response envelope:
 
 ```json
 {
   "date": "2026-05-30",
+  "events": [
+    { "id": 1, "title": "Marco's birthday", "description": null, "category": "Birthday" }
+  ]
+}
+```
+
+Response envelope for `alias=next_week`:
+
+```json
+{
+  "startDate": "2026-06-08",
+  "endDate": "2026-06-14",
   "events": [
     { "id": 1, "title": "Marco's birthday", "description": null, "category": "Birthday" }
   ]
@@ -120,7 +136,7 @@ Errors:
 | PUT | `/admin/events/:id` | Session required | Update event, redirect to dashboard |
 | DELETE | `/admin/events/:id` | Session required | Delete event, redirect to dashboard |
 
-Admin forms POST multipart or urlencoded data. CSRF tokens added via `csurf` middleware (or double-submit cookie pattern).
+Admin forms submit `POST` with hidden `_method` and use `method-override` to map to `PUT`/`DELETE`. Forms use urlencoded data. CSRF tokens added via `csurf` middleware.
 
 ## Query Logic for Events by Date
 
@@ -136,6 +152,8 @@ resolveDate(alias | 'YYYY-MM-DD') → { startDate: Date, endDate: Date }
 | `tomorrow` | today+1 | today+1 |
 | `next_week` | Monday of next week | Sunday of next week |
 | explicit date | that date | that date |
+
+All alias calculations are performed in timezone `Europe/Helsinki`.
 
 Event matching for a date range `[start, end]`:
 
@@ -159,7 +177,7 @@ Better-sqlite3 prepared statements used throughout — no N+1 queries, one round
 ## Implementation Order
 
 ### Phase 1 — Scaffolding & DB
-1. `npm init`, install deps: `express better-sqlite3 bcrypt express-session dotenv csurf`
+1. `npm init`, install deps: `express better-sqlite3 bcrypt express-session dotenv csurf method-override`
 2. Create `src/db/connection.js` — open SQLite DB file, run `CREATE TABLE` once, export singleton
 3. Write `src/utils/dateMath.js` — alias resolver + recurring matcher
 4. Smoke-test: `node src/index.js` prints "listening on :3000"
@@ -173,7 +191,7 @@ Better-sqlite3 prepared statements used throughout — no N+1 queries, one round
 
 ### Phase 3 — Public API
 10. `src/middleware/apiKey.js` — guard for `/api/*` routes
-11. `src/routes/public.js` GET `/api/events` — param parsing, date resolution, DB queries, JSON response
+11. `src/routes/public.js` GET `/api/events` — param parsing, reject both `date`+`alias`, Helsinki date resolution, DB queries, JSON response
 12. `GET /` — render homepage with today's events
 
 ### Phase 4 — Polish & Testing
@@ -200,9 +218,9 @@ Better-sqlite3 prepared statements used throughout — no N+1 queries, one round
 
 | Alias | Resolved Range |
 |-------|---------------|
-| `today` | `new Date().toISOString().slice(0,10)` — single day |
-| `tomorrow` | single day, `today + 1` |
-| `next_week` | Monday–Sunday of week starting 7 days from today |
+| `today` | current date in `Europe/Helsinki` |
+| `tomorrow` | Helsinki date + 1 day |
+| `next_week` | Monday–Sunday of week starting 7 days from today (Helsinki) |
 | arbitrary `YYYY-MM-DD` | single day |
 
 For arbitrary dates, the validator rejects dates before 2000-01-01 and after 2099-12-31.
@@ -220,7 +238,9 @@ For arbitrary dates, the validator rejects dates before 2000-01-01 and after 209
 ## Success Criteria
 
 * `GET /api/events?alias=today` returns correct events with valid API key
+* `GET /api/events?date=2026-05-30&alias=today` returns `400`
 * `GET /api/events?date=2026-12-31&category=Birthday` filters correctly
+* `GET /api/events?alias=next_week` returns `{ startDate, endDate, events }`
 * Admin login with valid credentials grants access to CRUD
 * Admin login with invalid credentials shows error, no session
 * Recurring birthday on month/day appears for any year queried
