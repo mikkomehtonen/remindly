@@ -2,10 +2,11 @@
 
 ## Project Status
 
-This repo is in early scaffolding. No `package.json` or `src/` yet. The authoritative spec lives in:
+Scaffolding complete. All phases implemented and verified. See `.opencode/plans/` for design decisions.
 
 - `interview/event-query-api-admin.md` — product requirements & Q&A
 - `.opencode/plans/plan-event-query-api-admin.md` — implementation plan, schema, route map
+- `.opencode/plans/checklist-event-query-api-admin.md` — execution checklist
 
 Trust the plan over any ad-hoc guesses when generating code.
 
@@ -15,13 +16,13 @@ Trust the plan over any ad-hoc guesses when generating code.
 |-------|--------|-----------|
 | Runtime | Node.js 20+ | |
 | DB | SQLite via `better-sqlite3` | **Synchronous API** — do not add async/await wrappers around DB calls |
-| Templating | EJS | Not Pug; HTML-like syntax for admin forms |
+| Templating | EJS | Not Pug; HTML-like syntax for admin forms; views are standalone (no layout engine) |
 | Sessions | `express-session` | |
 | Password hashing | `bcrypt` | Hash the single admin password at boot, never store in DB |
-| CSRF | `csurf` | Required on all admin POST/PUT/DELETE |
-| Styling | Inline CSS / minimal stylesheet | No CSS framework |
+| CSRF | Custom `src/middleware/csrf.js` | Session-based CSRF token (replaced deprecated `csurf` package) |
+| Styling | Inline CSS in each view | No CSS framework; each view is self-contained |
 
-## Directory Layout (planned)
+## Directory Layout
 
 ```
 src/
@@ -30,6 +31,7 @@ src/
   middleware/
     auth.js             # session config + admin guard
     apiKey.js           # x-api-key header validation
+    csrf.js             # custom CSRF protection
   routes/
     public.js           # GET / (HTML), GET /api/events (JSON)
     admin.js            # login/logout + event CRUD
@@ -39,7 +41,11 @@ src/
     admin/login.ejs
     admin/dashboard.ejs
     admin/eventForm.ejs
+    error.ejs
   utils/dateMath.js     # alias resolver + recurring-event matcher
+tests/
+  dateMath.test.js      # unit tests for date utilities
+  api.test.js           # integration tests for API endpoints
 ```
 
 ## Environment Variables (all required at runtime)
@@ -52,7 +58,7 @@ src/
 | `PORT` | Default `3000` |
 | `NODE_ENV` | `development` or `production` |
 
-`.env` files are gitignored. There is no `.env.example` yet.
+`.env` files are gitignored. Copy `.env.example` to `.env` and fill in your values.
 
 ## Database Schema (single table)
 
@@ -66,6 +72,7 @@ src/
 - Query params: `date` (YYYY-MM-DD), `alias` (`today` | `tomorrow` | `next_week`), `category`.
 - `next_week` = Monday–Sunday of the week starting 7 days from today.
 - Response envelope: `{ date: "YYYY-MM-DD", events: [...] }`
+- `next_week` envelope: `{ startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", events: [...] }`
 - Recurring events match by `(month, day)` projected onto the query year; one-time events match `event_date` directly.
 - SQL approach: **two separate queries** (recurring + fixed) concatenated in JS. Do not try to unify them into one clever SQL query.
 
@@ -75,32 +82,27 @@ src/
 - Login POST validates against bcrypt hash of env password.
 - Logout POST destroys session.
 - CRUD: `GET/POST /admin/events`, `GET/PUT/DELETE /admin/events/:id`
-- Forms are server-rendered EJS with CSRF tokens.
+- Forms are server-rendered EJS with CSRF tokens (via custom middleware).
 
 ## Code Quality
 
 | Tool | Scope | Notes |
 |------|-------|-------|
-| **ESLint** | JS source (`src/`) | `eslint-config-prettier` must be included so Prettier owns formatting |
-| **Prettier** | JS + EJS + CSS | Single source of truth for formatting; run before commits |
-| **lint-staged** | Pre-commit | ESLint + Prettier on staged files only |
+| **ESLint** | JS source (`src/`) | Flat config with `eslint-config-prettier` |
+| **Prettier** | JS source (`src/`) | Single source of truth for formatting; run before commits |
+| **lint-staged** | Pre-commit | ESLint + Prettier on staged JS files |
+| **Node test runner** | `tests/` | Built-in `node --test`, no external test framework |
 
-**Commands (to add to `package.json` scripts):**
+**Commands:**
 
 ```bash
 npm run lint      # eslint src/
-npm run format    # prettier --write src/ views/
-npm test          # once test suite is added (jest/mocha TBD in plan)
+npm run format    # prettier --write "src/**/*.js"
+npm test          # node --test tests/**/*.test.js
+npm start         # node src/index.js
 ```
 
 Run `lint -> format -> test` before pushing. CI should enforce the same order.
-
-## Dev Commands (to create once scaffolding exists)
-
-```bash
-npm install
-node src/index.js          # dev server
-```
 
 ## Gotchas
 
@@ -109,3 +111,4 @@ node src/index.js          # dev server
 - Date range queries for recurring events must handle December→January year-wrap when `next_week` spans the boundary.
 - Admin credentials live **only** in env vars — never seed a users table or hardcode defaults.
 - API keys are env-only — no key management UI.
+- **`cookie-parser` is an explicit dependency** — added when replacing `csurf` with custom CSRF middleware.
