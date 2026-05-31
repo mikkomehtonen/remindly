@@ -154,7 +154,7 @@
       }
     %>
     <div class="toolbar">
-      <h2>Events</h2>
+      <h2>Events <span style="font-weight: 400; color: #7a7470; font-size: 0.9375rem;">(<%= events.length %><% if (category) { %> / <%= totalCount %><% } %>)</span></h2>
       <div style="display: flex; gap: 12px; align-items: center;">
         <form method="GET" action="/admin" id="filter-form">
           <input type="hidden" name="sort" value="<%= sort %>">
