@@ -10,7 +10,7 @@ function resolveDate(input) {
     startDate.setDate(startDate.getDate() + 1);
   } else if (input === 'next_week') {
     const dayOfWeek = helsinkiNow.getDay();
-    const daysUntilNextMonday = dayOfWeek === 0 ? 8 : 15 - dayOfWeek;
+    const daysUntilNextMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
     startDate = new Date(helsinkiNow);
     startDate.setDate(startDate.getDate() + daysUntilNextMonday);
   } else {
