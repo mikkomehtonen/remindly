@@ -167,6 +167,7 @@ router.get('/admin', ensureAdmin, (req, res) => {
   const sortableColumns = ['title', 'category', 'type', 'date'];
   const sort = sortableColumns.includes(req.query.sort) ? req.query.sort : 'date';
   const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
+  const category = VALID_CATEGORIES.includes(req.query.category) ? req.query.category : null;
 
   const orderByMap = {
     title: `title COLLATE NOCASE ${order}, category, is_recurring DESC, month, day, event_date`,
@@ -177,11 +178,18 @@ router.get('/admin', ensureAdmin, (req, res) => {
 
   const orderBy = orderByMap[sort] || orderByMap.date;
 
-  const events = db
-    .prepare(`SELECT * FROM events ORDER BY ${orderBy}`)
-    .all();
+  let sql = 'SELECT * FROM events';
+  const params = [];
+  if (category) {
+    sql += ' WHERE category = ?';
+    params.push(category);
+  }
+  sql += ` ORDER BY ${orderBy}`;
 
-  res.render('admin/dashboard', { events, csrfToken: req.csrfToken(), sort, order });
+  const events = db.prepare(sql).all(...params);
+  const totalCount = db.prepare('SELECT COUNT(*) as cnt FROM events').get().cnt;
+
+  res.render('admin/dashboard', { events, totalCount, csrfToken: req.csrfToken(), sort, order, category, categories: VALID_CATEGORIES });
 });
 
 /**

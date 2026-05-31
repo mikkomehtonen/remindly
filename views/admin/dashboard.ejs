@@ -55,6 +55,8 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
     }
     .toolbar h2 {
       font-size: 1.25rem;
@@ -137,24 +139,55 @@
     </nav>
   </header>
   <main>
+    <%
+      function sortUrl(col) {
+        const params = new URLSearchParams();
+        if (sort === col && order === 'ASC') {
+          params.set('sort', col);
+          params.set('order', 'desc');
+        } else {
+          params.set('sort', col);
+          params.set('order', 'asc');
+        }
+        if (category) params.set('category', category);
+        return '?' + params.toString();
+      }
+    %>
     <div class="toolbar">
       <h2>Events</h2>
-      <a href="/admin/events/new" class="btn btn-primary">+ New Event</a>
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <form method="GET" action="/admin" id="filter-form">
+          <input type="hidden" name="sort" value="<%= sort %>">
+          <input type="hidden" name="order" value="<%= order %>">
+          <select name="category" onchange="document.getElementById('filter-form').submit()" style="padding: 8px 12px; border: 1px solid #ebe7e0; border-radius: 8px; background: #ffffff; font-family: inherit; font-size: 0.875rem; color: #2d2926;">
+            <option value="">All Categories</option>
+            <% categories.forEach(function(cat) { %>
+              <option value="<%= cat %>" <%= category === cat ? 'selected' : '' %>><%= cat %></option>
+            <% }) %>
+          </select>
+        </form>
+        <a href="/admin/events/new" class="btn btn-primary">+ New Event</a>
+      </div>
     </div>
 
     <% if (events.length === 0) { %>
       <div class="empty-state">
-        <p>No events yet. Create your first event to get started!</p>
-        <a href="/admin/events/new" class="btn btn-primary">Create Event</a>
+        <% if (category) { %>
+          <p>No events found for category "<%= category %>".</p>
+          <a href="/admin" class="btn btn-primary">Clear Filter</a>
+        <% } else { %>
+          <p>No events yet. Create your first event to get started!</p>
+          <a href="/admin/events/new" class="btn btn-primary">Create Event</a>
+        <% } %>
       </div>
     <% } else { %>
       <table>
         <thead>
           <tr>
-            <th><a href="?sort=title&order=<%= sort === 'title' && order === 'ASC' ? 'desc' : 'asc' %>">Title <%= sort === 'title' ? (order === 'ASC' ? '↑' : '↓') : '' %></a></th>
-            <th><a href="?sort=category&order=<%= sort === 'category' && order === 'ASC' ? 'desc' : 'asc' %>">Category <%= sort === 'category' ? (order === 'ASC' ? '↑' : '↓') : '' %></a></th>
-            <th><a href="?sort=type&order=<%= sort === 'type' && order === 'ASC' ? 'desc' : 'asc' %>">Type <%= sort === 'type' ? (order === 'ASC' ? '↑' : '↓') : '' %></a></th>
-            <th><a href="?sort=date&order=<%= sort === 'date' && order === 'ASC' ? 'desc' : 'asc' %>">Date <%= sort === 'date' ? (order === 'ASC' ? '↑' : '↓') : '' %></a></th>
+            <th><a href="<%= sortUrl('title') %>">Title <%= sort === 'title' ? (order === 'ASC' ? '↑' : '↓') : '' %></a></th>
+            <th><a href="<%= sortUrl('category') %>">Category <%= sort === 'category' ? (order === 'ASC' ? '↑' : '↓') : '' %></a></th>
+            <th><a href="<%= sortUrl('type') %>">Type <%= sort === 'type' ? (order === 'ASC' ? '↑' : '↓') : '' %></a></th>
+            <th><a href="<%= sortUrl('date') %>">Date <%= sort === 'date' ? (order === 'ASC' ? '↑' : '↓') : '' %></a></th>
             <th>Actions</th>
           </tr>
         </thead>
