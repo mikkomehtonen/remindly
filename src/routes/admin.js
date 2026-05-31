@@ -163,19 +163,25 @@ router.post('/admin/logout', ensureAdmin, (req, res) => {
  */
 router.get('/admin', ensureAdmin, (req, res) => {
   const db = getDb();
+
+  const sortableColumns = ['title', 'category', 'type', 'date'];
+  const sort = sortableColumns.includes(req.query.sort) ? req.query.sort : 'date';
+  const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
+
+  const orderByMap = {
+    title: `title COLLATE NOCASE ${order}, category, is_recurring DESC, month, day, event_date`,
+    category: `category COLLATE NOCASE ${order}, title, is_recurring DESC, month, day, event_date`,
+    type: `is_recurring ${order} NULLS LAST, title, category, month, day, event_date`,
+    date: `is_recurring DESC, month ${order} NULLS LAST, day ${order} NULLS LAST, event_date ${order} NULLS LAST, title COLLATE NOCASE`,
+  };
+
+  const orderBy = orderByMap[sort] || orderByMap.date;
+
   const events = db
-    .prepare(
-      `
-    SELECT * FROM events
-    ORDER BY
-      is_recurring DESC,
-      month ASC NULLS LAST,
-      day ASC NULLS LAST,
-      event_date ASC NULLS LAST
-  `,
-    )
+    .prepare(`SELECT * FROM events ORDER BY ${orderBy}`)
     .all();
-  res.render('admin/dashboard', { events, csrfToken: req.csrfToken() });
+
+  res.render('admin/dashboard', { events, csrfToken: req.csrfToken(), sort, order });
 });
 
 /**

@@ -111,6 +111,8 @@
     }
     .badge-recurring { background: #e0efe5; color: #3f654d; }
     .badge-onetime { background: #f9ece7; color: #a85f48; }
+    th a { color: #2d2926; text-decoration: none; }
+    th a:hover { color: #6a9e7e; text-decoration: underline; }
     .empty-state {
       text-align: center;
       padding: 48px 24px;
@@ -149,10 +151,10 @@
       <table>
         <thead>
           <tr>
-            <th>Title</th>
-            <th>Category</th>
-            <th>Type</th>
-            <th>Date</th>
+            <th><a href="?sort=title&order=<%= sort === 'title' && order === 'ASC' ? 'desc' : 'asc' %>">Title <%= sort === 'title' ? (order === 'ASC' ? '↑' : '↓') : '' %></a></th>
+            <th><a href="?sort=category&order=<%= sort === 'category' && order === 'ASC' ? 'desc' : 'asc' %>">Category <%= sort === 'category' ? (order === 'ASC' ? '↑' : '↓') : '' %></a></th>
+            <th><a href="?sort=type&order=<%= sort === 'type' && order === 'ASC' ? 'desc' : 'asc' %>">Type <%= sort === 'type' ? (order === 'ASC' ? '↑' : '↓') : '' %></a></th>
+            <th><a href="?sort=date&order=<%= sort === 'date' && order === 'ASC' ? 'desc' : 'asc' %>">Date <%= sort === 'date' ? (order === 'ASC' ? '↑' : '↓') : '' %></a></th>
             <th>Actions</th>
           </tr>
         </thead>
