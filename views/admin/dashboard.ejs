@@ -4,81 +4,133 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Remindly</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Nunito', 'Segoe UI', system-ui, sans-serif;
       line-height: 1.6;
-      color: #333;
+      color: #2d2926;
       max-width: 900px;
       margin: 0 auto;
-      padding: 20px;
-      background: #f5f5f5;
+      padding: 24px;
+      background: #faf8f4;
     }
     header {
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      background: #ffffff;
+      padding: 24px;
+      border-radius: 14px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(45, 41, 38, 0.06), 0 1px 2px rgba(45, 41, 38, 0.04);
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    header h1 { font-size: 1.5em; color: #2563eb; }
-    nav a { color: #2563eb; text-decoration: none; margin-left: 15px; }
-    nav a:hover { text-decoration: underline; }
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #6a9e7e;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
+    nav { display: flex; align-items: center; gap: 16px; }
+    nav a {
+      color: #7a7470;
+      text-decoration: none;
+      font-weight: 400;
+      font-size: 0.9375rem;
+      transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    nav a:hover { color: #548466; }
     main {
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      background: #ffffff;
+      padding: 24px;
+      border-radius: 14px;
+      box-shadow: 0 1px 3px rgba(45, 41, 38, 0.06), 0 1px 2px rgba(45, 41, 38, 0.04);
     }
     .toolbar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
+    }
+    .toolbar h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #2d2926;
+      line-height: 1.3;
     }
     .btn {
       display: inline-block;
-      padding: 8px 16px;
+      padding: 10px 20px;
       border: none;
-      border-radius: 4px;
+      border-radius: 10px;
       cursor: pointer;
       text-decoration: none;
-      font-size: 0.9em;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      font-family: inherit;
+      transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms;
     }
-    .btn-primary { background: #2563eb; color: #fff; }
-    .btn-primary:hover { background: #1d4ed8; }
-    .btn-danger { background: #dc2626; color: #fff; }
-    .btn-danger:hover { background: #b91c1c; }
-    .btn-secondary { background: #6b7280; color: #fff; }
-    .btn-secondary:hover { background: #4b5563; }
-    .btn-sm { padding: 4px 10px; font-size: 0.8em; }
+    .btn:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px #faf8f4, 0 0 0 4px #6a9e7e;
+    }
+    .btn-primary { background: #6a9e7e; color: #ffffff; }
+    .btn-primary:hover { background: #548466; }
+    .btn-danger { background: #c4735a; color: #ffffff; padding: 6px 12px; font-size: 0.8125rem; }
+    .btn-danger:hover { background: #a85f48; }
+    .btn-danger:focus-visible { box-shadow: 0 0 0 2px #faf8f4, 0 0 0 4px #c4735a; }
+    .btn-secondary { background: #f2efe8; color: #2d2926; padding: 6px 12px; font-size: 0.8125rem; }
+    .btn-secondary:hover { background: #e0dbd4; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb; }
-    th { background: #f9fafb; font-weight: 600; }
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #ebe7e0;
+    }
+    th {
+      background: #f2efe8;
+      font-weight: 600;
+      font-size: 0.8125rem;
+      color: #2d2926;
+      letter-spacing: 0.01em;
+    }
+    td { color: #2d2926; }
+    tr:hover td { background: #faf8f4; }
+    .actions { display: flex; gap: 8px; }
     .actions form { display: inline; }
     .badge {
       display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 0.8em;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.8125rem;
+      font-weight: 600;
     }
-    .badge-recurring { background: #dbeafe; color: #1e40af; }
-    .badge-onetime { background: #fef3c7; color: #92400e; }
-    .empty-state { text-align: center; padding: 40px; color: #6b7280; }
+    .badge-recurring { background: #e0efe5; color: #3f654d; }
+    .badge-onetime { background: #f9ece7; color: #a85f48; }
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: #7a7470;
+    }
+    .empty-state p {
+      font-size: 1rem;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>Admin Dashboard</h1>
+    <h1>Dashboard</h1>
     <nav>
       <a href="/">Public Site</a>
       <form method="POST" action="/admin/logout" style="display:inline;">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <button type="submit" class="btn btn-secondary btn-sm">Logout</button>
+        <button type="submit" class="btn btn-secondary">Logout</button>
       </form>
     </nav>
   </header>
@@ -90,7 +142,8 @@
 
     <% if (events.length === 0) { %>
       <div class="empty-state">
-        <p>No events yet. Create your first event!</p>
+        <p>No events yet. Create your first event to get started!</p>
+        <a href="/admin/events/new" class="btn btn-primary">Create Event</a>
       </div>
     <% } else { %>
       <table>
@@ -106,7 +159,7 @@
         <tbody>
           <% events.forEach(function(event) { %>
             <tr>
-              <td><%= event.title %></td>
+              <td><strong><%= event.title %></strong></td>
               <td><%= event.category %></td>
               <td>
                 <% if (event.is_recurring) { %>
@@ -123,10 +176,10 @@
                 <% } %>
               </td>
               <td class="actions">
-                <a href="/admin/events/<%= event.id %>/edit" class="btn btn-secondary btn-sm">Edit</a>
+                <a href="/admin/events/<%= event.id %>/edit" class="btn btn-secondary">Edit</a>
                 <form method="POST" action="/admin/events/<%= event.id %>?_method=DELETE">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete this event?')">Delete</button>
+                  <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this event?')">Delete</button>
                 </form>
               </td>
             </tr>

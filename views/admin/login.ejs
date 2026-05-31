@@ -4,57 +4,98 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Login - Remindly</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Nunito', 'Segoe UI', system-ui, sans-serif;
       line-height: 1.6;
-      color: #333;
+      color: #2d2926;
       display: flex;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      background: #f5f5f5;
+      background: #faf8f4;
+      padding: 24px;
     }
     .login-box {
-      background: #fff;
-      padding: 30px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      background: #ffffff;
+      padding: 32px;
+      border-radius: 14px;
+      box-shadow: 0 4px 12px rgba(45, 41, 38, 0.08), 0 2px 4px rgba(45, 41, 38, 0.04);
       width: 100%;
       max-width: 400px;
     }
-    .login-box h1 { margin-bottom: 20px; color: #2563eb; font-size: 1.5em; }
-    .form-group { margin-bottom: 15px; }
-    .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
+    .login-box h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #6a9e7e;
+      margin-bottom: 24px;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
+    .form-group { margin-bottom: 20px; }
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+      font-size: 0.8125rem;
+      color: #2d2926;
+      letter-spacing: 0.01em;
+    }
     .form-group input {
       width: 100%;
-      padding: 8px 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 4px;
-      font-size: 1em;
+      padding: 10px 14px;
+      border: 1px solid #e0dbd4;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-family: inherit;
+      color: #2d2926;
+      background: #ffffff;
+      transition: border-color 150ms, box-shadow 150ms;
+    }
+    .form-group input::placeholder { color: #7a7470; }
+    .form-group input:focus {
+      outline: none;
+      border-color: #6a9e7e;
+      box-shadow: 0 0 0 3px rgba(106, 158, 126, 0.15);
     }
     .btn {
       display: inline-block;
-      padding: 8px 16px;
+      padding: 10px 20px;
       border: none;
-      border-radius: 4px;
+      border-radius: 10px;
       cursor: pointer;
-      font-size: 0.9em;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      font-family: inherit;
+      transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms;
+      width: 100%;
     }
-    .btn-primary { background: #2563eb; color: #fff; }
-    .btn-primary:hover { background: #1d4ed8; }
+    .btn:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px #faf8f4, 0 0 0 4px #6a9e7e;
+    }
+    .btn-primary { background: #6a9e7e; color: #ffffff; }
+    .btn-primary:hover { background: #548466; }
     .alert {
-      padding: 10px 15px;
-      border-radius: 4px;
-      margin-bottom: 15px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      font-size: 0.9375rem;
     }
-    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .alert-error {
+      background: #f9ece7;
+      color: #a85f48;
+      border: 1px solid #f0d0c6;
+    }
   </style>
 </head>
 <body>
   <div class="login-box">
-    <h1>Admin Login</h1>
+    <h1>Welcome back</h1>
     <% if (error) { %>
       <div class="alert alert-error"><%= error %></div>
     <% } %>
@@ -62,13 +103,13 @@
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <div class="form-group">
         <label for="username">Username</label>
-        <input type="text" id="username" name="username" required autocomplete="username">
+        <input type="text" id="username" name="username" required autocomplete="username" placeholder="Enter your username">
       </div>
       <div class="form-group">
         <label for="password">Password</label>
-        <input type="password" id="password" name="password" required autocomplete="current-password">
+        <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="Enter your password">
       </div>
-      <button type="submit" class="btn btn-primary">Login</button>
+      <button type="submit" class="btn btn-primary">Sign in</button>
     </form>
   </div>
 </body>
