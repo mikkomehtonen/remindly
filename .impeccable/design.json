@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-31T12:00:00Z",
+  "title": "Design System: Remindly",
+  "extensions": {
+    "colorMeta": {
+      "sage": {
+        "role": "primary",
+        "displayName": "Soft Sage",
+        "canonical": "oklch(0.62 0.09 148)",
+        "tonalRamp": [
+          "#1a2e22",
+          "#2d4a38",
+          "#3f654d",
+          "#548466",
+          "#6a9e7e",
+          "#8db89e",
+          "#b5d4c1",
+          "#e0efe5"
+        ]
+      },
+      "sage-deep": {
+        "role": "primary",
+        "displayName": "Deep Sage",
+        "canonical": "oklch(0.54 0.09 148)",
+        "tonalRamp": [
+          "#162619",
+          "#263f2c",
+          "#36583f",
+          "#476f53",
+          "#548466",
+          "#7aa38a",
+          "#a5c4b1",
+          "#d5e6db"
+        ]
+      },
+      "terracotta": {
+        "role": "secondary",
+        "displayName": "Warm Terracotta",
+        "canonical": "oklch(0.60 0.12 45)",
+        "tonalRamp": [
+          "#3d1f16",
+          "#6b3626",
+          "#954d3a",
+          "#c4735a",
+          "#d4927e",
+          "#e3b1a2",
+          "#f0d0c6",
+          "#f9ece7"
+        ]
+      },
+      "cream": {
+        "role": "neutral",
+        "displayName": "Cream",
+        "canonical": "oklch(0.975 0.012 80)",
+        "tonalRamp": [
+          "#4a4640",
+          "#6b665e",
+          "#8d877d",
+          "#afa89d",
+          "#d1cbc0",
+          "#e5e0d7",
+          "#f2efe8",
+          "#faf8f4"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "oklch(0.94 0.015 80)",
+        "tonalRamp": [
+          "#3f3c37",
+          "#5c5850",
+          "#7a756b",
+          "#989287",
+          "#b6b0a4",
+          "#d4cec3",
+          "#ebe7e0",
+          "#f2efe8"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.22 0.015 55)",
+        "tonalRamp": [
+          "#0d0c0b",
+          "#1a1816",
+          "#2d2926",
+          "#4a4541",
+          "#6b6560",
+          "#8d8680",
+          "#b0aaa4",
+          "#d4cfc9"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "oklch(0.52 0.015 55)",
+        "tonalRamp": [
+          "#1f1d1b",
+          "#363230",
+          "#4d4844",
+          "#645e59",
+          "#7a7470",
+          "#969089",
+          "#b3ada7",
+          "#d0cbc6"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Border",
+        "canonical": "oklch(0.89 0.012 80)",
+        "tonalRamp": [
+          "#3a3733",
+          "#565149",
+          "#726c62",
+          "#8e877b",
+          "#aaa398",
+          "#c6bfb5",
+          "#e0dbd4",
+          "#f0ede8"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page titles and main headings. Bold anchor without shouting."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section headings, card titles, table headers."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default text, descriptions, form content. Max 65ch line length."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Form labels, badges, small UI text. Heavier weight for legibility."
+      }
+    },
+    "shadows": [
+      {
+        "name": "resting",
+        "value": "0 1px 3px rgba(45, 41, 38, 0.06), 0 1px 2px rgba(45, 41, 38, 0.04)",
+        "purpose": "Cards and containers at rest. Barely perceptible lift from cream background."
+      },
+      {
+        "name": "interactive",
+        "value": "0 4px 12px rgba(45, 41, 38, 0.08), 0 2px 4px rgba(45, 41, 38, 0.04)",
+        "purpose": "Hover states and elevated elements. Noticeable but not dramatic."
+      },
+      {
+        "name": "overlay",
+        "value": "0 8px 24px rgba(45, 41, 38, 0.12), 0 4px 8px rgba(45, 41, 38, 0.06)",
+        "purpose": "Modals, dropdowns, floating elements. Strongest but still warm and diffused."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Default easing for state transitions (hover, focus)."
+      },
+      {
+        "name": "duration-fast",
+        "value": "150ms",
+        "purpose": "Quick feedback: button hovers, focus rings."
+      },
+      {
+        "name": "duration-normal",
+        "value": "200ms",
+        "purpose": "Standard transitions: card hovers, color shifts."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main call-to-action. Soft sage with white text.",
+      "html": "<button class=\"ds-btn-primary\">Create Event</button>",
+      "css": ".ds-btn-primary { background: #6a9e7e; color: #ffffff; padding: 10px 20px; border: none; border-radius: 10px; font-family: 'Nunito', sans-serif; font-size: 0.9375rem; font-weight: 600; cursor: pointer; transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms; } .ds-btn-primary:hover { background: #548466; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px #faf8f4, 0 0 0 4px #6a9e7e; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Secondary actions. Paper background with ink text.",
+      "html": "<button class=\"ds-btn-secondary\">Cancel</button>",
+      "css": ".ds-btn-secondary { background: #f2efe8; color: #2d2926; padding: 10px 20px; border: none; border-radius: 10px; font-family: 'Nunito', sans-serif; font-size: 0.9375rem; font-weight: 600; cursor: pointer; transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-secondary:hover { background: #e0dbd4; } .ds-btn-secondary:focus-visible { outline: none; box-shadow: 0 0 0 2px #faf8f4, 0 0 0 4px #6a9e7e; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive actions. Warm terracotta signals caution.",
+      "html": "<button class=\"ds-btn-danger\">Delete</button>",
+      "css": ".ds-btn-danger { background: #c4735a; color: #ffffff; padding: 8px 16px; border: none; border-radius: 10px; font-family: 'Nunito', sans-serif; font-size: 0.8125rem; font-weight: 600; cursor: pointer; transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-danger:hover { background: #a85f48; } .ds-btn-danger:focus-visible { outline: none; box-shadow: 0 0 0 2px #faf8f4, 0 0 0 4px #c4735a; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Form input with warm border and sage focus ring.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Enter event title\">",
+      "css": ".ds-input { background: #ffffff; color: #2d2926; padding: 10px 14px; border: 1px solid #e0dbd4; border-radius: 10px; font-family: 'Nunito', sans-serif; font-size: 1rem; transition: border-color 150ms, box-shadow 150ms; } .ds-input::placeholder { color: #7a7470; } .ds-input:focus { outline: none; border-color: #6a9e7e; box-shadow: 0 0 0 3px rgba(106, 158, 126, 0.15); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Content container with warm resting shadow.",
+      "html": "<div class=\"ds-card\"><h3 class=\"ds-card-title\">Event Title</h3><p class=\"ds-card-text\">Event description goes here.</p></div>",
+      "css": ".ds-card { background: #ffffff; padding: 20px; border-radius: 14px; box-shadow: 0 1px 3px rgba(45, 41, 38, 0.06), 0 1px 2px rgba(45, 41, 38, 0.04); transition: box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-card:hover { box-shadow: 0 4px 12px rgba(45, 41, 38, 0.08), 0 2px 4px rgba(45, 41, 38, 0.04); } .ds-card-title { font-family: 'Nunito', sans-serif; font-size: 1.25rem; font-weight: 700; color: #2d2926; margin: 0 0 8px; } .ds-card-text { font-family: 'Nunito', sans-serif; font-size: 1rem; color: #2d2926; line-height: 1.6; margin: 0; }"
+    },
+    {
+      "name": "Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Category and status indicators. Pill-shaped with paper background.",
+      "html": "<span class=\"ds-badge\">Birthday</span>",
+      "css": ".ds-badge { display: inline-block; background: #f2efe8; color: #548466; padding: 3px 10px; border-radius: 999px; font-family: 'Nunito', sans-serif; font-size: 0.8125rem; font-weight: 600; }"
+    },
+    {
+      "name": "Badge Recurring",
+      "kind": "chip",
+      "description": "Recurring event indicator with light sage tint.",
+      "html": "<span class=\"ds-badge-recurring\">Recurring</span>",
+      "css": ".ds-badge-recurring { display: inline-block; background: #e0efe5; color: #3f654d; padding: 3px 10px; border-radius: 999px; font-family: 'Nunito', sans-serif; font-size: 0.8125rem; font-weight: 600; }"
+    },
+    {
+      "name": "Navigation Link",
+      "kind": "nav",
+      "description": "Header navigation with sage active state.",
+      "html": "<nav class=\"ds-nav\"><a href=\"#\" class=\"ds-nav-link ds-nav-link--active\">Dashboard</a><a href=\"#\" class=\"ds-nav-link\">Settings</a></nav>",
+      "css": ".ds-nav { display: flex; gap: 24px; } .ds-nav-link { font-family: 'Nunito', sans-serif; font-size: 0.9375rem; font-weight: 400; color: #7a7470; text-decoration: none; padding: 4px 0; transition: color 150ms; } .ds-nav-link:hover { color: #548466; } .ds-nav-link--active { color: #6a9e7e; font-weight: 600; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Cozy Planner",
+    "overview": "Remindly's visual identity draws from the warmth and familiarity of a well-loved paper planner. The interface feels like opening that planner on a quiet Sunday morning: cream-colored pages, soft sage accents marking important dates, and a sense of calm organization. This is a personal tool, not a corporate dashboard. Every design choice reinforces approachability over efficiency-at-all-costs.",
+    "keyCharacteristics": [
+      "Warm cream surfaces that feel like paper, not screens",
+      "Soft sage green as the primary accent, used with intention",
+      "Rounded, friendly typography (Nunito) at every scale",
+      "Generous whitespace that lets content breathe",
+      "Subtle depth through warm-toned shadows, never harsh"
+    ],
+    "rules": [
+      {
+        "name": "The Sage Restraint Rule",
+        "body": "Sage green appears on no more than 20% of any given screen. Its warmth is the accent, not the atmosphere.",
+        "section": "colors"
+      },
+      {
+        "name": "The Paper Stack Rule",
+        "body": "Depth is conveyed through cream-to-paper tonal shifts, not heavy shadows.",
+        "section": "colors"
+      },
+      {
+        "name": "The Single Voice Rule",
+        "body": "One typeface (Nunito) carries the entire interface. Weight contrast provides hierarchy, not font switching.",
+        "section": "typography"
+      },
+      {
+        "name": "The Paper Shadow Rule",
+        "body": "All shadows use the ink color (warm brown) at low opacity, never pure black or cool gray.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use Cream (#faf8f4) as the primary background, never pure white (#ffffff).",
+      "Do use Nunito at every scale. Weight contrast (400/600/700) provides all the hierarchy needed.",
+      "Do keep sage green to 20% or less of any screen.",
+      "Do use warm-toned shadows (rgba with ink's warm brown hue), never cool gray or pure black.",
+      "Do use generous border-radius (10-14px) on cards and containers.",
+      "Do write friendly, encouraging copy in empty states and error messages."
+    ],
+    "donts": [
+      "Don't use corporate SaaS patterns: gray-blue palettes, sharp corners, dense layouts, or clinical copy.",
+      "Don't use pure white (#ffffff) backgrounds or pure black (#000000) text.",
+      "Don't use glassmorphism, gradient text, or decorative blurs.",
+      "Don't add side-stripe borders (border-left > 1px as colored accents) on cards or list items.",
+      "Don't use more than one typeface.",
+      "Don't make shadows harsh or cool-toned.",
+      "Don't use overly playful or cartoon-like elements.",
+      "Don't use dark mode or heavy dark themes."
+    ]
+  }
+}
