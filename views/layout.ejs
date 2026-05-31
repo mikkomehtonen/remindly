@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= typeof title !== 'undefined' ? title : 'Remindly' %></title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    header {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    header h1 { font-size: 1.5em; color: #2563eb; }
+    nav { margin-top: 10px; }
+    nav a { color: #2563eb; text-decoration: none; margin-right: 15px; }
+    nav a:hover { text-decoration: underline; }
+    main {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .event-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 15px;
+      margin-bottom: 10px;
+    }
+    .event-card h3 { margin-bottom: 5px; }
+    .event-card .category {
+      display: inline-block;
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.8em;
+    }
+    .btn {
+      display: inline-block;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 0.9em;
+    }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-secondary { background: #6b7280; color: #fff; }
+    .btn-secondary:hover { background: #4b5563; }
+    .btn-sm { padding: 4px 10px; font-size: 0.8em; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 1em;
+    }
+    .form-group textarea { min-height: 80px; resize: vertical; }
+    .alert {
+      padding: 10px 15px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+    }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .actions { margin-top: 20px; }
+    .actions form { display: inline; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+    th { background: #f9fafb; font-weight: 600; }
+    .empty-state { text-align: center; padding: 40px; color: #6b7280; }
+    .filter-links { margin: 15px 0; }
+    .filter-links a {
+      display: inline-block;
+      margin-right: 10px;
+      padding: 4px 12px;
+      background: #e5e7eb;
+      color: #374151;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 0.9em;
+    }
+    .filter-links a:hover { background: #d1d5db; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Remindly</h1>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/admin">Admin</a>
+    </nav>
+  </header>
+  <main>
+    <%- body %>
+  </main>
+</body>
+</html>

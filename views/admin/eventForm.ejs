@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= event ? 'Edit Event' : 'New Event' %> - Remindly Admin</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    header {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    header h1 { font-size: 1.5em; color: #2563eb; }
+    header a { color: #2563eb; text-decoration: none; }
+    main {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 1em;
+    }
+    .form-group textarea { min-height: 80px; resize: vertical; }
+    .form-row { display: flex; gap: 15px; }
+    .form-row .form-group { flex: 1; }
+    .btn {
+      display: inline-block;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 0.9em;
+    }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary { background: #6b7280; color: #fff; }
+    .btn-secondary:hover { background: #4b5563; }
+    .alert {
+      padding: 10px 15px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+    }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .alert-error ul { margin-left: 20px; }
+    .form-actions { margin-top: 20px; display: flex; gap: 10px; }
+    .recurring-fields, .onetime-fields { display: none; }
+    .recurring-fields.active, .onetime-fields.active { display: block; }
+    .radio-group { display: flex; gap: 20px; margin-bottom: 15px; }
+    .radio-group label { font-weight: normal; display: flex; align-items: center; gap: 5px; }
+  </style>
+  <script>
+    function toggleEventType() {
+      var recurring = document.querySelector('input[name="is_recurring"]:checked');
+      var isRecurring = recurring && recurring.value === '1';
+      document.querySelector('.recurring-fields').classList.toggle('active', isRecurring);
+      document.querySelector('.onetime-fields').classList.toggle('active', !isRecurring);
+    }
+    window.onload = function() { toggleEventType(); };
+  </script>
+</head>
+<body>
+  <header>
+    <h1><a href="/admin">Admin</a> / <%= event ? 'Edit Event' : 'New Event' %></h1>
+  </header>
+  <main>
+    <% if (errors && errors.length > 0) { %>
+      <div class="alert alert-error">
+        <ul>
+          <% errors.forEach(function(err) { %>
+            <li><%= err %></li>
+          <% }) %>
+        </ul>
+      </div>
+    <% } %>
+
+    <form method="POST"
+      <% if (event) { %>
+        action="/admin/events/<%= event.id %>?_method=PUT"
+      <% } else { %>
+        action="/admin/events"
+      <% } %>
+    >
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+      <div class="form-group">
+        <label for="title">Title *</label>
+        <input type="text" id="title" name="title" required
+          value="<%= event ? event.title : '' %>">
+      </div>
+
+      <div class="form-group">
+        <label for="description">Description</label>
+        <textarea id="description" name="description"><%= event && event.description ? event.description : '' %></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="category">Category *</label>
+        <select id="category" name="category" required>
+          <option value="">-- Select --</option>
+          <% ['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Anniversary'].forEach(function(cat) { %>
+            <option value="<%= cat %>" <%= (event && event.category === cat) ? 'selected' : '' %>><%= cat %></option>
+          <% }) %>
+        </select>
+      </div>
+
+      <div class="radio-group">
+        <label>
+          <input type="radio" name="is_recurring" value="1" onchange="toggleEventType()"
+            <%= (event && event.is_recurring === 1) || (!event) ? 'checked' : '' %>>
+          Recurring
+        </label>
+        <label>
+          <input type="radio" name="is_recurring" value="0" onchange="toggleEventType()"
+            <%= (event && event.is_recurring === 0) ? 'checked' : '' %>>
+          One-time
+        </label>
+      </div>
+
+      <div class="recurring-fields active">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="month">Month *</label>
+            <input type="number" id="month" name="month" min="1" max="12"
+              value="<%= event && event.month ? event.month : '' %>">
+          </div>
+          <div class="form-group">
+            <label for="day">Day *</label>
+            <input type="number" id="day" name="day" min="1" max="31"
+              value="<%= event && event.day ? event.day : '' %>">
+          </div>
+        </div>
+      </div>
+
+      <div class="onetime-fields">
+        <div class="form-group">
+          <label for="event_date">Event Date *</label>
+          <input type="date" id="event_date" name="event_date"
+            value="<%= event && event.event_date ? event.event_date : '' %>">
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">
+          <%= event ? 'Update Event' : 'Create Event' %>
+        </button>
+        <a href="/admin" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

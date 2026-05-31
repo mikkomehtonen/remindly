@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Remindly</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    header {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 1.5em; color: #2563eb; }
+    nav a { color: #2563eb; text-decoration: none; margin-left: 15px; }
+    nav a:hover { text-decoration: underline; }
+    main {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 0.9em;
+    }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-secondary { background: #6b7280; color: #fff; }
+    .btn-secondary:hover { background: #4b5563; }
+    .btn-sm { padding: 4px 10px; font-size: 0.8em; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+    th { background: #f9fafb; font-weight: 600; }
+    .actions form { display: inline; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.8em;
+    }
+    .badge-recurring { background: #dbeafe; color: #1e40af; }
+    .badge-onetime { background: #fef3c7; color: #92400e; }
+    .empty-state { text-align: center; padding: 40px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Admin Dashboard</h1>
+    <nav>
+      <a href="/">Public Site</a>
+      <form method="POST" action="/admin/logout" style="display:inline;">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn btn-secondary btn-sm">Logout</button>
+      </form>
+    </nav>
+  </header>
+  <main>
+    <div class="toolbar">
+      <h2>Events</h2>
+      <a href="/admin/events/new" class="btn btn-primary">+ New Event</a>
+    </div>
+
+    <% if (events.length === 0) { %>
+      <div class="empty-state">
+        <p>No events yet. Create your first event!</p>
+      </div>
+    <% } else { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Category</th>
+            <th>Type</th>
+            <th>Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% events.forEach(function(event) { %>
+            <tr>
+              <td><%= event.title %></td>
+              <td><%= event.category %></td>
+              <td>
+                <% if (event.is_recurring) { %>
+                  <span class="badge badge-recurring">Recurring</span>
+                <% } else { %>
+                  <span class="badge badge-onetime">One-time</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (event.is_recurring) { %>
+                  <%= String(event.month).padStart(2, '0') %>-<%= String(event.day).padStart(2, '0') %>
+                <% } else { %>
+                  <%= event.event_date %>
+                <% } %>
+              </td>
+              <td class="actions">
+                <a href="/admin/events/<%= event.id %>/edit" class="btn btn-secondary btn-sm">Edit</a>
+                <form method="POST" action="/admin/events/<%= event.id %>?_method=DELETE">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete this event?')">Delete</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </main>
+</body>
+</html>
