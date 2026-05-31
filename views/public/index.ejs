@@ -125,6 +125,7 @@
     <div class="filter-links">
       <a href="/" class="<%= typeof alias === 'undefined' || !alias ? 'active' : '' %>">Today</a>
       <a href="/?alias=tomorrow" class="<%= typeof alias !== 'undefined' && alias === 'tomorrow' ? 'active' : '' %>">Tomorrow</a>
+      <a href="/?alias=this_week" class="<%= typeof alias !== 'undefined' && alias === 'this_week' ? 'active' : '' %>">This Week</a>
       <a href="/?alias=next_week" class="<%= typeof alias !== 'undefined' && alias === 'next_week' ? 'active' : '' %>">Next Week</a>
     </div>
     <% if (events.length === 0) { %>

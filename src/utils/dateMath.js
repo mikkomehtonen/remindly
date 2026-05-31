@@ -8,6 +8,11 @@ function resolveDate(input) {
   } else if (input === 'tomorrow') {
     startDate = new Date(helsinkiNow);
     startDate.setDate(startDate.getDate() + 1);
+  } else if (input === 'this_week') {
+    const dayOfWeek = helsinkiNow.getDay();
+    const daysUntilMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    startDate = new Date(helsinkiNow);
+    startDate.setDate(startDate.getDate() + daysUntilMonday);
   } else if (input === 'next_week') {
     const dayOfWeek = helsinkiNow.getDay();
     const daysUntilNextMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
@@ -46,7 +51,7 @@ function resolveDate(input) {
   }
 
   const endDate =
-    input === 'next_week'
+    input === 'next_week' || input === 'this_week'
       ? new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + 6)
       : new Date(startDate);
 

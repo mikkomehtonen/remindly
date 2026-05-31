@@ -28,6 +28,15 @@ describe('resolveDate', () => {
     assert.strictEqual(result.startDate.getDay(), 1);
   });
 
+  it('resolves this_week', () => {
+    const result = resolveDate('this_week');
+    assert.ok(result);
+    const diff =
+      (result.endDate.getTime() - result.startDate.getTime()) / (1000 * 60 * 60 * 24);
+    assert.strictEqual(diff, 6);
+    assert.strictEqual(result.startDate.getDay(), 1);
+  });
+
   it('resolves explicit date', () => {
     const result = resolveDate('2026-12-25');
     assert.ok(result);

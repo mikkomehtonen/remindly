@@ -93,6 +93,17 @@ describe('API integration', () => {
     assert.ok(Array.isArray(json.events));
   });
 
+  it('returns this_week envelope', async () => {
+    const res = await request('/api/events?alias=this_week', {
+      headers: { 'x-api-key': 'test-key-1' },
+    });
+    assert.strictEqual(res.status, 200);
+    const json = JSON.parse(res.body);
+    assert.ok(json.startDate);
+    assert.ok(json.endDate);
+    assert.ok(Array.isArray(json.events));
+  });
+
   it('returns 200 for public homepage', async () => {
     const res = await request('/');
     assert.strictEqual(res.status, 200);

@@ -17,7 +17,7 @@ const VALID_CATEGORIES = ['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Annive
  *         name: alias
  *         schema:
  *           type: string
- *           enum: [today, tomorrow, next_week]
+ *           enum: [today, tomorrow, this_week, next_week]
  *           default: today
  *         description: Date alias for quick lookups
  *     responses:
@@ -27,7 +27,7 @@ const VALID_CATEGORIES = ['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Annive
 router.get('/', (req, res) => {
   const alias = req.query.alias || 'today';
   let result;
-  if (['today', 'tomorrow', 'next_week'].includes(alias)) {
+  if (['today', 'tomorrow', 'this_week', 'next_week'].includes(alias)) {
     result = resolveDate(alias);
   } else {
     result = resolveDate('today');
@@ -40,15 +40,16 @@ router.get('/', (req, res) => {
   const db = getDb();
   const events = queryEvents(db, result.startDate, result.endDate);
 
-  if (alias === 'next_week') {
+  if (alias === 'next_week' || alias === 'this_week') {
     return res.render('public/index', {
       date: `${formatDate(result.startDate)} to ${formatDate(result.endDate)}`,
+      alias,
       events,
       isRange: true,
     });
   }
 
-  res.render('public/index', { date: formatDate(result.startDate), events, isRange: false });
+  res.render('public/index', { date: formatDate(result.startDate), alias, events, isRange: false });
 });
 
 /**
@@ -72,7 +73,7 @@ router.get('/', (req, res) => {
  *         name: alias
  *         schema:
  *           type: string
- *           enum: [today, tomorrow, next_week]
+ *           enum: [today, tomorrow, this_week, next_week]
  *           default: today
  *         description: Quick date alias
  *       - in: query
@@ -137,8 +138,8 @@ router.get('/api/events', (req, res) => {
     return res.status(400).json({ error: 'Provide either date or alias, not both' });
   }
 
-  if (alias && !['today', 'tomorrow', 'next_week'].includes(alias)) {
-    return res.status(400).json({ error: 'Invalid alias. Use today, tomorrow, or next_week' });
+  if (alias && !['today', 'tomorrow', 'this_week', 'next_week'].includes(alias)) {
+    return res.status(400).json({ error: 'Invalid alias. Use today, tomorrow, this_week, or next_week' });
   }
 
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -159,7 +160,7 @@ router.get('/api/events', (req, res) => {
   const db = getDb();
   const events = queryEvents(db, resolved.startDate, resolved.endDate, category);
 
-  if (alias === 'next_week') {
+  if (alias === 'next_week' || alias === 'this_week') {
     return res.json({
       startDate: formatDate(resolved.startDate),
       endDate: formatDate(resolved.endDate),
