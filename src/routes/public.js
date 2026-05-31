@@ -44,10 +44,11 @@ router.get('/', (req, res) => {
     return res.render('public/index', {
       date: `${formatDate(result.startDate)} to ${formatDate(result.endDate)}`,
       events,
+      isRange: true,
     });
   }
 
-  res.render('public/index', { date: formatDate(result.startDate), events });
+  res.render('public/index', { date: formatDate(result.startDate), events, isRange: false });
 });
 
 /**
@@ -232,12 +233,34 @@ function queryEvents(db, startDate, endDate, category) {
 
   const combined = [...recurringEvents, ...fixedEvents];
 
-  return combined.map((e) => ({
-    id: e.id,
-    title: e.title,
-    description: e.description,
-    category: e.category,
-  }));
+  const startMs = startDate.getTime();
+  const endMs = endDate.getTime();
+
+  const eventsWithDates = combined.map((e) => {
+    let displayDate;
+    if (e.is_recurring === 1) {
+      const candidate = new Date(startDate.getFullYear(), e.month - 1, e.day);
+      if (candidate.getTime() >= startMs && candidate.getTime() <= endMs) {
+        displayDate = candidate;
+      } else {
+        displayDate = new Date(startDate.getFullYear() + 1, e.month - 1, e.day);
+      }
+    } else {
+      displayDate = new Date(e.event_date + 'T00:00:00');
+    }
+    return {
+      id: e.id,
+      title: e.title,
+      description: e.description,
+      category: e.category,
+      _sortDate: displayDate,
+      displayDate: formatDate(displayDate),
+    };
+  });
+
+  eventsWithDates.sort((a, b) => a._sortDate - b._sortDate);
+
+  return eventsWithDates.map(({ _sortDate, ...rest }) => rest);
 }
 
 module.exports = router;
