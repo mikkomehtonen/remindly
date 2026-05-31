@@ -4,6 +4,8 @@ const path = require('path');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const methodOverride = require('method-override');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
 const { initDb } = require('./db/connection');
 const { sessionMiddleware } = require('./middleware/auth');
 const { apiKeyGuard } = require('./middleware/apiKey');
@@ -23,6 +25,8 @@ app.use(cookieParser());
 app.use(methodOverride('_method'));
 app.use(sessionMiddleware);
 app.use('/admin', csrfProtection);
+
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use(apiKeyGuard);
 app.use('/', publicRoutes);

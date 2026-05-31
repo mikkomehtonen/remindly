@@ -92,6 +92,7 @@ tests/
 | **Prettier** | JS source (`src/`) | Single source of truth for formatting; run before commits |
 | **lint-staged** | Pre-commit | ESLint + Prettier on staged JS files |
 | **Node test runner** | `tests/` | Built-in `node --test`, no external test framework |
+| **Swagger UI** | `/docs` | API documentation via `swagger-ui-express`, spec in `src/config/swagger.js` |
 
 **Commands:**
 

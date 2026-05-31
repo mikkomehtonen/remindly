@@ -5,6 +5,25 @@ const { resolveDate, formatDate, getRecurringDateRange } = require('../utils/dat
 
 const VALID_CATEGORIES = ['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Anniversary'];
 
+/**
+ * @swagger
+ * /:
+ *   get:
+ *     summary: View upcoming events (HTML)
+ *     description: Renders the public HTML page showing events for today, tomorrow, or next week
+ *     tags: [Public]
+ *     parameters:
+ *       - in: query
+ *         name: alias
+ *         schema:
+ *           type: string
+ *           enum: [today, tomorrow, next_week]
+ *           default: today
+ *         description: Date alias for quick lookups
+ *     responses:
+ *       200:
+ *         description: HTML page with events
+ */
 router.get('/', (req, res) => {
   const alias = req.query.alias || 'today';
   let result;
@@ -31,6 +50,85 @@ router.get('/', (req, res) => {
   res.render('public/index', { date: formatDate(result.startDate), events });
 });
 
+/**
+ * @swagger
+ * /api/events:
+ *   get:
+ *     summary: Query events
+ *     description: Retrieve events filtered by date, alias, or category
+ *     tags: [Public API]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *           format: date
+ *           example: "2024-12-25"
+ *         description: Specific date in YYYY-MM-DD format
+ *       - in: query
+ *         name: alias
+ *         schema:
+ *           type: string
+ *           enum: [today, tomorrow, next_week]
+ *           default: today
+ *         description: Quick date alias
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *           enum: [Birthday, Name Day, Flag Day, Holiday, Anniversary]
+ *         description: Filter by event category
+ *     responses:
+ *       200:
+ *         description: List of events
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 date:
+ *                   type: string
+ *                   example: "2024-12-25"
+ *                 startDate:
+ *                   type: string
+ *                   example: "2024-12-25"
+ *                 endDate:
+ *                   type: string
+ *                   example: "2024-12-31"
+ *                 events:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Event'
+ *       400:
+ *         description: Invalid parameters
+ *       401:
+ *         description: Missing or invalid API key
+ *
+ * components:
+ *   schemas:
+ *     Event:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *         title:
+ *           type: string
+ *         description:
+ *           type: string
+ *         category:
+ *           type: string
+ *         is_recurring:
+ *           type: boolean
+ *         month:
+ *           type: integer
+ *         day:
+ *           type: integer
+ *         event_date:
+ *           type: string
+ *           format: date
+ */
 router.get('/api/events', (req, res) => {
   const { date, alias, category } = req.query;
 

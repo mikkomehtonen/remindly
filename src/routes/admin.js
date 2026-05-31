@@ -5,6 +5,115 @@ const { ensureAdmin, verifyPassword } = require('../middleware/auth');
 
 const VALID_CATEGORIES = ['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Anniversary'];
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Event:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *         title:
+ *           type: string
+ *         description:
+ *           type: string
+ *           nullable: true
+ *         category:
+ *           type: string
+ *           enum: [Birthday, Name Day, Flag Day, Holiday, Anniversary]
+ *         is_recurring:
+ *           type: integer
+ *           enum: [0, 1]
+ *         month:
+ *           type: integer
+ *           nullable: true
+ *           minimum: 1
+ *           maximum: 12
+ *         day:
+ *           type: integer
+ *           nullable: true
+ *           minimum: 1
+ *           maximum: 31
+ *         event_date:
+ *           type: string
+ *           format: date
+ *           nullable: true
+ *         created_at:
+ *           type: string
+ *           format: date-time
+ *         updated_at:
+ *           type: string
+ *           format: date-time
+ *     EventInput:
+ *       type: object
+ *       required:
+ *         - title
+ *         - category
+ *       properties:
+ *         title:
+ *           type: string
+ *         description:
+ *           type: string
+ *         category:
+ *           type: string
+ *           enum: [Birthday, Name Day, Flag Day, Holiday, Anniversary]
+ *         is_recurring:
+ *           type: string
+ *           enum: ["0", "1"]
+ *         month:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 12
+ *         day:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 31
+ *         event_date:
+ *           type: string
+ *           format: date
+ *   securitySchemes:
+ *     SessionAuth:
+ *       type: apiKey
+ *       in: cookie
+ *       name: connect.sid
+ *       description: Admin session cookie (set after login)
+ */
+
+/**
+ * @swagger
+ * /admin/login:
+ *   get:
+ *     summary: Login page (HTML)
+ *     description: Renders the admin login page
+ *     tags: [Admin - HTML]
+ *     responses:
+ *       200:
+ *         description: HTML login form
+ *   post:
+ *     summary: Admin login
+ *     description: Authenticate with username and password
+ *     tags: [Admin - HTML]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/x-www-form-urlencoded:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - password
+ *             properties:
+ *               username:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       302:
+ *         description: Redirect to admin dashboard
+ *       200:
+ *         description: Invalid credentials
+ */
 router.get('/admin/login', (req, res) => {
   res.render('admin/login', { error: null, csrfToken: req.csrfToken() });
 });
@@ -18,12 +127,40 @@ router.post('/admin/login', (req, res) => {
   res.render('admin/login', { error: 'Invalid credentials', csrfToken: req.csrfToken() });
 });
 
+/**
+ * @swagger
+ * /admin/logout:
+ *   post:
+ *     summary: Admin logout
+ *     description: Destroy the admin session
+ *     tags: [Admin]
+ *     security:
+ *       - SessionAuth: []
+ *     responses:
+ *       302:
+ *         description: Redirect to login
+ */
 router.post('/admin/logout', ensureAdmin, (req, res) => {
   req.session.destroy(() => {
     res.redirect('/admin/login');
   });
 });
 
+/**
+ * @swagger
+ * /admin:
+ *   get:
+ *     summary: Admin dashboard
+ *     description: Renders the admin dashboard listing all events
+ *     tags: [Admin]
+ *     security:
+ *       - SessionAuth: []
+ *     responses:
+ *       302:
+ *         description: Redirect to login if not authenticated
+ *       200:
+ *         description: HTML dashboard with all events
+ */
 router.get('/admin', ensureAdmin, (req, res) => {
   const db = getDb();
   const events = db
@@ -41,6 +178,42 @@ router.get('/admin', ensureAdmin, (req, res) => {
   res.render('admin/dashboard', { events, csrfToken: req.csrfToken() });
 });
 
+/**
+ * @swagger
+ * /admin/events/new:
+ *   get:
+ *     summary: New event form
+ *     description: Renders the HTML form for creating a new event
+ *     tags: [Admin]
+ *     security:
+ *       - SessionAuth: []
+ *     responses:
+ *       302:
+ *         description: Redirect to login if not authenticated
+ *       200:
+ *         description: HTML event creation form
+ *
+ * /admin/events:
+ *   post:
+ *     summary: Create event
+ *     description: Create a new event (recurring or one-time)
+ *     tags: [Admin]
+ *     security:
+ *       - SessionAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/x-www-form-urlencoded:
+ *           schema:
+ *             $ref: '#/components/schemas/EventInput'
+ *     responses:
+ *       302:
+ *         description: Redirect to admin dashboard on success
+ *       200:
+ *         description: Form with validation errors
+ *       401:
+ *         description: Redirect to login if not authenticated
+ */
 router.get('/admin/events/new', ensureAdmin, (req, res) => {
   res.render('admin/eventForm', {
     event: null,
@@ -88,6 +261,78 @@ router.post('/admin/events', ensureAdmin, (req, res) => {
   res.redirect('/admin');
 });
 
+/**
+ * @swagger
+ * /admin/events/{id}/edit:
+ *   get:
+ *     summary: Edit event form
+ *     description: Renders the HTML form for editing an existing event
+ *     tags: [Admin]
+ *     security:
+ *       - SessionAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     responses:
+ *       302:
+ *         description: Redirect to login if not authenticated
+ *       404:
+ *         description: Event not found
+ *       200:
+ *         description: HTML event edit form
+ *
+ * /admin/events/{id}:
+ *   put:
+ *     summary: Update event
+ *     description: Update an existing event (recurring or one-time)
+ *     tags: [Admin]
+ *     security:
+ *       - SessionAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/x-www-form-urlencoded:
+ *           schema:
+ *             $ref: '#/components/schemas/EventInput'
+ *     responses:
+ *       302:
+ *         description: Redirect to admin dashboard on success
+ *       200:
+ *         description: Form with validation errors
+ *       404:
+ *         description: Event not found
+ *       401:
+ *         description: Redirect to login if not authenticated
+ *   delete:
+ *     summary: Delete event
+ *     description: Permanently delete an event
+ *     tags: [Admin]
+ *     security:
+ *       - SessionAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Event ID
+ *     responses:
+ *       302:
+ *         description: Redirect to admin dashboard on success
+ *       401:
+ *         description: Redirect to login if not authenticated
+ */
 router.get('/admin/events/:id/edit', ensureAdmin, (req, res) => {
   const db = getDb();
   const event = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
