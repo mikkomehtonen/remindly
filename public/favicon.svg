@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Calendar body -->
+  <rect x="2" y="5" width="28" height="25" rx="3" ry="3" fill="#f2efe8" stroke="#d0cbc2" stroke-width="1"/>
+  <!-- Header bar -->
+  <rect x="2" y="5" width="28" height="7" rx="3" ry="3" fill="#6a9e7e"/>
+  <rect x="2" y="9" width="28" height="3" fill="#6a9e7e"/>
+  <!-- Ring holes -->
+  <circle cx="9" cy="3" r="1.5" fill="none" stroke="#d0cbc2" stroke-width="1.5"/>
+  <circle cx="23" cy="3" r="1.5" fill="none" stroke="#d0cbc2" stroke-width="1.5"/>
+  <!-- Day grid: 4x7 dots -->
+  <g fill="#2d2926">
+    <circle cx="6" cy="17" r="1.2"/><circle cx="10" cy="17" r="1.2"/><circle cx="14" cy="17" r="1.2"/><circle cx="18" cy="17" r="1.2"/><circle cx="22" cy="17" r="1.2"/><circle cx="26" cy="17" r="1.2"/>
+    <circle cx="6" cy="21" r="1.2"/><circle cx="10" cy="21" r="1.2"/><circle cx="14" cy="21" r="1.2"/><circle cx="18" cy="21" r="1.2"/><circle cx="22" cy="21" r="1.2"/><circle cx="26" cy="21" r="1.2"/>
+    <circle cx="6" cy="25" r="1.2"/><circle cx="10" cy="25" r="1.2"/><circle cx="14" cy="25" r="1.2"/><circle cx="18" cy="25" r="1.2"/><circle cx="22" cy="25" r="1.2"/><circle cx="26" cy="25" r="1.2"/>
+  </g>
+</svg>

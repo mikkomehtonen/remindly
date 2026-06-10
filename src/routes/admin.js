@@ -189,7 +189,15 @@ router.get('/admin', ensureAdmin, (req, res) => {
   const events = db.prepare(sql).all(...params);
   const totalCount = db.prepare('SELECT COUNT(*) as cnt FROM events').get().cnt;
 
-  res.render('admin/dashboard', { events, totalCount, csrfToken: req.csrfToken(), sort, order, category, categories: VALID_CATEGORIES });
+  res.render('admin/dashboard', {
+    events,
+    totalCount,
+    csrfToken: req.csrfToken(),
+    sort,
+    order,
+    category,
+    categories: VALID_CATEGORIES,
+  });
 });
 
 /**

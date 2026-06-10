@@ -26,6 +26,8 @@ app.use(methodOverride('_method'));
 app.use(sessionMiddleware);
 app.use('/admin', csrfProtection);
 
+app.use(express.static(path.join(__dirname, '..', 'public')));
+
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use(apiKeyGuard);

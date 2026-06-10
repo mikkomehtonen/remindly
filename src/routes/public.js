@@ -139,7 +139,9 @@ router.get('/api/events', (req, res) => {
   }
 
   if (alias && !['today', 'tomorrow', 'this_week', 'next_week'].includes(alias)) {
-    return res.status(400).json({ error: 'Invalid alias. Use today, tomorrow, this_week, or next_week' });
+    return res
+      .status(400)
+      .json({ error: 'Invalid alias. Use today, tomorrow, this_week, or next_week' });
   }
 
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {

@@ -108,4 +108,24 @@ describe('API integration', () => {
     const res = await request('/');
     assert.strictEqual(res.status, 200);
   });
+
+  it('serves favicon.svg without API key', async () => {
+    const res = await request('/favicon.svg');
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.headers['content-type'].includes('image/svg+xml'));
+  });
+
+  it('favicon.svg returns valid SVG', async () => {
+    const res = await request('/favicon.svg');
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.body.includes('<svg'));
+    assert.ok(res.body.includes('viewBox'));
+    assert.ok(res.body.includes('#6a9e7e'));
+  });
+
+  it('homepage includes favicon link tag', async () => {
+    const res = await request('/');
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.body.includes('<link rel="icon" type="image/svg+xml" href="/favicon.svg">'));
+  });
 });
