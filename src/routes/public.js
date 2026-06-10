@@ -1,7 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db/connection');
-const { resolveDate, formatDate, getRecurringDateRange } = require('../utils/dateMath');
+const {
+  resolveDate,
+  formatDate,
+  formatDateWithWeekday,
+  getRecurringDateRange,
+} = require('../utils/dateMath');
 
 const VALID_CATEGORIES = ['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Anniversary'];
 
@@ -38,9 +43,9 @@ router.get('/', (req, res) => {
   }
 
   const db = getDb();
-  const events = queryEvents(db, result.startDate, result.endDate);
 
   if (alias === 'next_week' || alias === 'this_week') {
+    const events = queryEvents(db, result.startDate, result.endDate, null, true);
     return res.render('public/index', {
       date: `${formatDate(result.startDate)} to ${formatDate(result.endDate)}`,
       alias,
@@ -49,6 +54,7 @@ router.get('/', (req, res) => {
     });
   }
 
+  const events = queryEvents(db, result.startDate, result.endDate);
   res.render('public/index', { date: formatDate(result.startDate), alias, events, isRange: false });
 });
 
@@ -176,7 +182,7 @@ router.get('/api/events', (req, res) => {
   });
 });
 
-function queryEvents(db, startDate, endDate, category) {
+function queryEvents(db, startDate, endDate, category, includeWeekday = false) {
   const range = getRecurringDateRange(startDate, endDate);
 
   function queryRecurring(mStart, dStart, mEnd, dEnd) {
@@ -257,7 +263,7 @@ function queryEvents(db, startDate, endDate, category) {
       description: e.description,
       category: e.category,
       _sortDate: displayDate,
-      displayDate: formatDate(displayDate),
+      displayDate: includeWeekday ? formatDateWithWeekday(displayDate) : formatDate(displayDate),
     };
   });
 

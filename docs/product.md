@@ -5,6 +5,7 @@ A lightweight event reminder app for tracking birthdays, name days, holidays, an
 ## Features
 
 - **Calendar Favicon** — SVG calendar icon served at `/favicon.svg` and referenced in all pages ([story](stories/001-add-favicon/story.md))
+- **Weekday Labels on Week Views** — Two-letter weekday abbreviation (Mo, Tu, etc.) shown next to dates in "This Week" and "Next Week" HTML views ([story](stories/002-weekday-labels-week-views/story.md))
 
 ## Non-Goals
 

@@ -65,6 +65,12 @@ function getHelsinkiDate() {
   return new Date(helsinkiDate.getFullYear(), helsinkiDate.getMonth(), helsinkiDate.getDate());
 }
 
+const WEEKDAY_ABBREVS = Object.freeze(['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']);
+
+function formatDateWithWeekday(date) {
+  return `${formatDate(date)} ${WEEKDAY_ABBREVS[date.getDay()]}`;
+}
+
 function formatDate(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -88,4 +94,10 @@ function getRecurringDateRange(startDate, endDate) {
   return { single: { mStart, dStart, mEnd, dEnd } };
 }
 
-module.exports = { resolveDate, formatDate, getRecurringDateRange };
+module.exports = {
+  resolveDate,
+  formatDate,
+  formatDateWithWeekday,
+  WEEKDAY_ABBREVS,
+  getRecurringDateRange,
+};

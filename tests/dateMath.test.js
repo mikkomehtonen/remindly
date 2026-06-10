@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { resolveDate, formatDate, getRecurringDateRange } = require('../src/utils/dateMath');
+const { resolveDate, formatDate, formatDateWithWeekday, WEEKDAY_ABBREVS, getRecurringDateRange } = require('../src/utils/dateMath');
 
 describe('resolveDate', () => {
   it('resolves today', () => {
@@ -54,6 +54,14 @@ describe('resolveDate', () => {
   });
 });
 
+describe('WEEKDAY_ABBREVS', () => {
+  it('is a frozen array of 7 strings', () => {
+    assert.deepStrictEqual(WEEKDAY_ABBREVS, ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']);
+    assert.strictEqual(Object.isFrozen(WEEKDAY_ABBREVS), true);
+    assert.strictEqual(WEEKDAY_ABBREVS.length, 7);
+  });
+});
+
 describe('formatDate', () => {
   it('formats date correctly', () => {
     const d = new Date(2026, 4, 30);
@@ -63,6 +71,37 @@ describe('formatDate', () => {
   it('pads single-digit months and days', () => {
     const d = new Date(2026, 0, 5);
     assert.strictEqual(formatDate(d), '2026-01-05');
+  });
+});
+
+describe('formatDateWithWeekday', () => {
+  it('returns YYYY-MM-DD Dd for Saturday', () => {
+    const d = new Date(2026, 5, 20);
+    assert.strictEqual(formatDateWithWeekday(d), '2026-06-20 Sa');
+  });
+
+  it('returns YYYY-MM-DD Dd for Monday', () => {
+    const d = new Date(2026, 0, 5);
+    assert.strictEqual(formatDateWithWeekday(d), '2026-01-05 Mo');
+  });
+
+  it('returns YYYY-MM-DD Dd for Sunday', () => {
+    const d = new Date(2026, 11, 27);
+    assert.strictEqual(formatDateWithWeekday(d), '2026-12-27 Su');
+  });
+
+  it('includes weekday abbreviation after a space', () => {
+    const d = new Date(2026, 4, 30);
+    const result = formatDateWithWeekday(d);
+    assert.ok(result.includes(' '));
+    const [datePart, abbr] = result.split(' ');
+    assert.strictEqual(datePart, '2026-05-30');
+    assert.strictEqual(abbr.length, 2);
+  });
+
+  it('does not change formatDate behaviour', () => {
+    const d = new Date(2026, 4, 30);
+    assert.strictEqual(formatDate(d), '2026-05-30');
   });
 });
 

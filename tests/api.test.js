@@ -128,4 +128,51 @@ describe('API integration', () => {
     assert.strictEqual(res.status, 200);
     assert.ok(res.body.includes('<link rel="icon" type="image/svg+xml" href="/favicon.svg">'));
   });
+
+  it('JSON API next_week envelope dates are YYYY-MM-DD without weekday', async () => {
+    const res = await request('/api/events?alias=next_week', {
+      headers: { 'x-api-key': 'test-key-1' },
+    });
+    assert.strictEqual(res.status, 200);
+    const json = JSON.parse(res.body);
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(json.startDate));
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(json.endDate));
+    json.events.forEach((e) => {
+      assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(e.displayDate), `Expected YYYY-MM-DD, got ${e.displayDate}`);
+    });
+  });
+
+  it('JSON API this_week envelope dates are YYYY-MM-DD without weekday', async () => {
+    const res = await request('/api/events?alias=this_week', {
+      headers: { 'x-api-key': 'test-key-1' },
+    });
+    assert.strictEqual(res.status, 200);
+    const json = JSON.parse(res.body);
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(json.startDate));
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(json.endDate));
+    json.events.forEach((e) => {
+      assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(e.displayDate), `Expected YYYY-MM-DD, got ${e.displayDate}`);
+    });
+  });
+
+  it('JSON API today returns YYYY-MM-DD date without weekday', async () => {
+    const res = await request('/api/events?alias=today', {
+      headers: { 'x-api-key': 'test-key-1' },
+    });
+    assert.strictEqual(res.status, 200);
+    const json = JSON.parse(res.body);
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(json.date));
+    json.events.forEach((e) => {
+      assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(e.displayDate), `Expected YYYY-MM-DD, got ${e.displayDate}`);
+    });
+  });
+
+  it('HTML today page does not include weekday abbreviations', async () => {
+    const res = await request('/');
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.body.includes('Events for'));
+    const headingMatch = res.body.match(/Events for ([^<]+)/);
+    assert.ok(headingMatch);
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(headingMatch[1].trim()));
+  });
 });
