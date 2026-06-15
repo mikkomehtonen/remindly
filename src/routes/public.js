@@ -7,8 +7,7 @@ const {
   formatDateWithWeekday,
   getRecurringDateRange,
 } = require('../utils/dateMath');
-
-const VALID_CATEGORIES = ['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Anniversary'];
+const { VALID_CATEGORIES } = require('../config/categories');
 
 /**
  * @swagger
@@ -86,7 +85,7 @@ router.get('/', (req, res) => {
  *         name: category
  *         schema:
  *           type: string
- *           enum: [Birthday, Name Day, Flag Day, Holiday, Anniversary]
+ *           enum: [Birthday, Name Day, Flag Day, Holiday, Anniversary, Other]
  *         description: Filter by event category
  *     responses:
  *       200:
@@ -150,7 +149,7 @@ router.get('/api/events', (req, res) => {
       .json({ error: 'Invalid alias. Use today, tomorrow, this_week, or next_week' });
   }
 
-  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
   }
 
@@ -160,7 +159,7 @@ router.get('/api/events', (req, res) => {
     });
   }
 
-  const resolved = resolveDate(alias || date);
+  const resolved = resolveDate(alias || date || 'today');
   if (!resolved) {
     return res.status(400).json({ error: 'Invalid date value' });
   }

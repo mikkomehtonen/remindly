@@ -32,6 +32,9 @@ src/
     auth.js             # session config + admin guard
     apiKey.js           # x-api-key header validation
     csrf.js             # custom CSRF protection
+  config/
+    categories.js       # shared VALID_CATEGORIES array
+    swagger.js          # swagger-jsdoc spec
   routes/
     public.js           # GET / (HTML), GET /api/events (JSON)
     admin.js            # login/logout + event CRUD
@@ -46,6 +49,7 @@ src/
 tests/
   dateMath.test.js      # unit tests for date utilities
   api.test.js           # integration tests for API endpoints
+  connection.test.js    # DB schema migration unit tests
 ```
 
 ## Environment Variables (all required at runtime)
@@ -62,7 +66,7 @@ tests/
 
 ## Database Schema (single table)
 
-- `events` — `id`, `title`, `description`, `category` (CHECK: `Birthday`, `Name Day`, `Flag Day`, `Holiday`, `Anniversary`), `is_recurring` (0 or 1), `month`/`day` (for recurring), `event_date` (YYYY-MM-DD for one-time), `created_at`, `updated_at`
+- `events` — `id`, `title`, `description`, `category` (CHECK: `Birthday`, `Name Day`, `Flag Day`, `Holiday`, `Anniversary`, `Other`), `is_recurring` (0 or 1), `month`/`day` (for recurring), `event_date` (YYYY-MM-DD for one-time), `created_at`, `updated_at`
 - **No `users` table.** Admin is env-only.
 - Invariant: `is_recurring=1` → `month`+`day` set, `event_date` null; `is_recurring=0` → opposite.
 
@@ -113,3 +117,6 @@ Run `lint -> format -> test` before pushing. CI should enforce the same order.
 - Admin credentials live **only** in env vars — never seed a users table or hardcode defaults.
 - API keys are env-only — no key management UI.
 - **`cookie-parser` is an explicit dependency** — added when replacing `csurf` with custom CSRF middleware.
+- **SQLite CHECK constraint migrations use rebuild-and-copy via `db.transaction()`.** SQLite does not support `ALTER TABLE … ALTER CONSTRAINT`. To change a CHECK, create a new table, `INSERT INTO … SELECT *`, drop the old table, and rename. Always wrap the DDL sequence in `db.transaction(() => { … })()` for crash safety — without it, a process crash between `DROP TABLE` and `ALTER TABLE … RENAME` orphans the data.
+- **Share DDL between table creation and migration.** When a migration rebuilds the same table with updated constraints, extract column definitions into a template literal constant (e.g., `EVENTS_TABLE_COLUMNS`) used by both `CREATE TABLE` and the migration's `CREATE TABLE events_new`. Otherwise the two copies will drift and the migration will silently produce a wrong schema.
+- **Time-zone-sensitive tests must match the server's timezone.** The server resolves date aliases (`today`, `tomorrow`, etc.) in `Europe/Helsinki`. Tests that compute month/day for recurring events must also use Helsinki timezone via `new Date().toLocaleString('en-US', { timeZone: 'Europe/Helsinki' })`, not `new Date()`.

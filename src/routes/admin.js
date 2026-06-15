@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db/connection');
 const { ensureAdmin, verifyPassword } = require('../middleware/auth');
-
-const VALID_CATEGORIES = ['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Anniversary'];
+const { VALID_CATEGORIES } = require('../config/categories');
 
 /**
  * @swagger
@@ -21,7 +20,7 @@ const VALID_CATEGORIES = ['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Annive
  *           nullable: true
  *         category:
  *           type: string
- *           enum: [Birthday, Name Day, Flag Day, Holiday, Anniversary]
+ *           enum: [Birthday, Name Day, Flag Day, Holiday, Anniversary, Other]
  *         is_recurring:
  *           type: integer
  *           enum: [0, 1]
@@ -57,7 +56,7 @@ const VALID_CATEGORIES = ['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Annive
  *           type: string
  *         category:
  *           type: string
- *           enum: [Birthday, Name Day, Flag Day, Holiday, Anniversary]
+ *           enum: [Birthday, Name Day, Flag Day, Holiday, Anniversary, Other]
  *         is_recurring:
  *           type: string
  *           enum: ["0", "1"]
@@ -240,6 +239,7 @@ router.get('/admin/events/new', ensureAdmin, (req, res) => {
   res.render('admin/eventForm', {
     event: null,
     errors: [],
+    categories: VALID_CATEGORIES,
     csrfToken: req.csrfToken(),
   });
 });
@@ -251,6 +251,7 @@ router.post('/admin/events', ensureAdmin, (req, res) => {
     return res.render('admin/eventForm', {
       event: req.body,
       errors,
+      categories: VALID_CATEGORIES,
       csrfToken: req.csrfToken(),
     });
   }
@@ -364,6 +365,7 @@ router.get('/admin/events/:id/edit', ensureAdmin, (req, res) => {
   res.render('admin/eventForm', {
     event,
     errors: [],
+    categories: VALID_CATEGORIES,
     csrfToken: req.csrfToken(),
   });
 });
@@ -380,6 +382,7 @@ router.put('/admin/events/:id', ensureAdmin, (req, res) => {
     return res.render('admin/eventForm', {
       event: { ...req.body, id: req.params.id },
       errors,
+      categories: VALID_CATEGORIES,
       csrfToken: req.csrfToken(),
     });
   }

@@ -185,7 +185,7 @@
         <label for="category">Category *</label>
         <select id="category" name="category" required>
           <option value="">Select a category</option>
-          <% ['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Anniversary'].forEach(function(cat) { %>
+          <% categories.forEach(function(cat) { %>
             <option value="<%= cat %>" <%= (event && event.category === cat) ? 'selected' : '' %>><%= cat %></option>
           <% }) %>
         </select>

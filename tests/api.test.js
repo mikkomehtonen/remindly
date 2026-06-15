@@ -27,6 +27,84 @@ function request(path, opts = {}) {
   });
 }
 
+/**
+ * Parse Set-Cookie header(s) into a flat cookie string for subsequent requests.
+ */
+function parseCookies(res) {
+  const cookies = res.headers['set-cookie'];
+  if (!cookies) return '';
+  if (Array.isArray(cookies)) {
+    return cookies.map((c) => c.split(';')[0]).join('; ');
+  }
+  return cookies.split(';')[0];
+}
+
+/**
+ * Extract CSRF token value from an HTML response body.
+ */
+function extractCsrf(body) {
+  const match = body.match(/name="_csrf"\s+value="([^"]+)"/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Perform admin login and return a cookie jar with session + csrf token.
+ */
+async function loginAsAdmin() {
+  // Step 1: GET /admin/login to get initial session cookie + CSRF token
+  const loginPage = await request('/admin/login');
+  const cookies = parseCookies(loginPage);
+  const csrfToken = extractCsrf(loginPage.body);
+
+  // Step 2: POST /admin/login with credentials
+  const loginRes = await request('/admin/login', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Cookie: cookies,
+    },
+    body: `username=admin&password=testpass&_csrf=${csrfToken}`,
+  });
+  const sessionCookies = parseCookies(loginRes);
+
+  return sessionCookies;
+}
+
+describe('Swagger spec', () => {
+  // Use server from API integration describe below
+  let swaggerSpec;
+
+  before(async () => {
+    // Delete require cache for swagger module to reload on fresh state
+    delete require.cache[require.resolve('../src/config/swagger')];
+    swaggerSpec = require('../src/config/swagger');
+  });
+
+  it('category enum in GET /api/events query param includes Other', () => {
+    const pathItem = swaggerSpec.paths['/api/events']?.get;
+    assert.ok(pathItem, 'GET /api/events should be defined');
+    const categoryParam = pathItem.parameters?.find((p) => p.name === 'category');
+    assert.ok(categoryParam, 'category parameter should exist');
+    assert.ok(categoryParam.schema?.enum?.includes('Other'), 'category enum should include Other');
+  });
+
+  it('Event schema category enum includes Other', () => {
+    const eventSchema = swaggerSpec.components?.schemas?.Event;
+    assert.ok(eventSchema, 'Event schema should exist');
+    const categoryProp = eventSchema.properties?.category;
+    assert.ok(categoryProp, 'category property should exist');
+    assert.ok(categoryProp.enum?.includes('Other'), 'Event category enum should include Other');
+  });
+
+  it('EventInput schema category enum includes Other', () => {
+    const eventInputSchema = swaggerSpec.components?.schemas?.EventInput;
+    assert.ok(eventInputSchema, 'EventInput schema should exist');
+    const categoryProp = eventInputSchema.properties?.category;
+    assert.ok(categoryProp, 'category property should exist');
+    assert.ok(categoryProp.enum?.includes('Other'), 'EventInput category enum should include Other');
+  });
+});
+
 describe('API integration', () => {
   let server;
 
@@ -174,5 +252,114 @@ describe('API integration', () => {
     const headingMatch = res.body.match(/Events for ([^<]+)/);
     assert.ok(headingMatch);
     assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(headingMatch[1].trim()));
+  });
+
+  describe('Other category', () => {
+    let adminCookies;
+
+    before(async () => {
+      adminCookies = await loginAsAdmin();
+    });
+
+    it('event form includes "Other" as a selectable category option', async () => {
+      const formPage = await request('/admin/events/new', {
+        headers: { Cookie: adminCookies },
+      });
+      assert.strictEqual(formPage.status, 200);
+      // Verify "Other" is listed as a selectable option in the dropdown
+      assert.ok(formPage.body.includes('value="Other"'), 'Event form should have Other option');
+      // Verify it's rendered from the categories array (not hardcoded)
+      assert.ok(
+        !formPage.body.includes("['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Anniversary'].forEach"),
+        'Should not use hardcoded category list',
+      );
+    });
+
+    it('error message for invalid category lists all valid categories including Other', async () => {
+      const res = await request('/api/events?category=Foo', {
+        headers: { 'x-api-key': 'test-key-1' },
+      });
+      assert.strictEqual(res.status, 400);
+      const json = JSON.parse(res.body);
+      // Check that all categories (including Other) are listed in the error
+      assert.ok(json.error.includes('Birthday'));
+      assert.ok(json.error.includes('Name Day'));
+      assert.ok(json.error.includes('Flag Day'));
+      assert.ok(json.error.includes('Holiday'));
+      assert.ok(json.error.includes('Anniversary'));
+      assert.ok(json.error.includes('Other'));
+    });
+
+    it('admin can create a recurring event with category "Other"', async () => {
+      // Get CSRF token for the new event form
+      const formPage = await request('/admin/events/new', {
+        headers: { Cookie: adminCookies },
+      });
+      const csrfToken = extractCsrf(formPage.body);
+
+      // Use Helsinki-today's month/day so the recurring event always matches alias=today queries
+      // (the server resolves date aliases in Europe/Helsinki timezone)
+      const helsinkiStr = new Date().toLocaleString('en-US', { timeZone: 'Europe/Helsinki' });
+      const helsinkiToday = new Date(helsinkiStr);
+      const month = helsinkiToday.getMonth() + 1;
+      const day = helsinkiToday.getDate();
+
+      // Create a recurring "Other" event
+      const createRes = await request('/admin/events', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Cookie: adminCookies,
+        },
+        body: `title=Graduation&category=Other&is_recurring=1&month=${month}&day=${day}&_csrf=${csrfToken}`,
+      });
+      // Should redirect to dashboard
+      assert.strictEqual(createRes.status, 302);
+      assert.strictEqual(createRes.headers.location, '/admin');
+
+      // Verify event appears on dashboard
+      const dashboard = await request('/admin', {
+        headers: { Cookie: adminCookies },
+      });
+      assert.strictEqual(dashboard.status, 200);
+      assert.ok(dashboard.body.includes('Graduation'));
+      assert.ok(dashboard.body.includes('Other'));
+    });
+
+    it('API query with category=Other returns only Other events', async () => {
+      const res = await request('/api/events?category=Other', {
+        headers: { 'x-api-key': 'test-key-1' },
+      });
+      assert.strictEqual(res.status, 200);
+      const json = JSON.parse(res.body);
+      assert.ok(Array.isArray(json.events));
+      json.events.forEach((e) => {
+        assert.strictEqual(e.category, 'Other');
+      });
+    });
+
+    it('API query with invalid category returns 400 with valid categories including Other', async () => {
+      const res = await request('/api/events?category=Foo', {
+        headers: { 'x-api-key': 'test-key-1' },
+      });
+      assert.strictEqual(res.status, 400);
+      const json = JSON.parse(res.body);
+      assert.ok(json.error.includes('Other'));
+    });
+
+    it('API query with alias=today returns Other events alongside other categories', async () => {
+      const res = await request('/api/events?alias=today', {
+        headers: { 'x-api-key': 'test-key-1' },
+      });
+      assert.strictEqual(res.status, 200);
+      const json = JSON.parse(res.body);
+      assert.ok(Array.isArray(json.events));
+      // At least one event should be "Other" (the one we created)
+      const otherEvents = json.events.filter((e) => e.category === 'Other');
+      assert.ok(otherEvents.length > 0, 'Expected at least one Other event');
+      otherEvents.forEach((e) => {
+        assert.strictEqual(e.category, 'Other');
+      });
+    });
   });
 });
