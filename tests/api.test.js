@@ -1,8 +1,9 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const http = require('http');
+const { getDb, initDb } = require('../src/db/connection');
 
-const BASE = 'http://localhost:3099';
+const BASE = 'http://localhost:9999';
 
 function request(path, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -103,13 +104,22 @@ describe('Swagger spec', () => {
     assert.ok(categoryProp, 'category property should exist');
     assert.ok(categoryProp.enum?.includes('Other'), 'EventInput category enum should include Other');
   });
+
+  it('GET /health is documented as an unauthenticated Health endpoint', () => {
+    const pathItem = swaggerSpec.paths['/health']?.get;
+    assert.ok(pathItem, 'GET /health should be documented');
+    assert.deepStrictEqual(pathItem.tags, ['Health'], 'should be tagged Health');
+    assert.strictEqual(pathItem.security, undefined, 'should not require authentication');
+    assert.ok(pathItem.responses?.[200]?.content?.['application/json'], 'should document 200 JSON response');
+    assert.ok(pathItem.responses?.[503]?.content?.['application/json'], 'should document 503 JSON response');
+  });
 });
 
 describe('API integration', () => {
   let server;
 
   before((_, done) => {
-    process.env.PORT = '3099';
+    process.env.PORT = '9999';
     process.env.API_KEYS = 'test-key-1,test-key-2';
     process.env.ADMIN_USERNAME = 'admin';
     process.env.ADMIN_PASSWORD = 'testpass';
@@ -360,6 +370,46 @@ describe('API integration', () => {
       otherEvents.forEach((e) => {
         assert.strictEqual(e.category, 'Other');
       });
+    });
+  });
+
+  describe('Health check', () => {
+    it('returns 200 with status ok when DB is reachable', async () => {
+      const res = await request('/health');
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.headers['content-type'].includes('application/json'));
+      const json = JSON.parse(res.body);
+      assert.deepStrictEqual(json, { status: 'ok' });
+      assert.strictEqual('timestamp' in json, false, 'should not contain timestamp');
+      assert.strictEqual('version' in json, false, 'should not contain version');
+      assert.strictEqual('db' in json, false, 'should not contain db');
+      assert.strictEqual('error' in json, false, 'should not contain error');
+    });
+
+    it('returns 503 with status error when DB is unreachable', async () => {
+      const db = getDb();
+      db.close();
+      try {
+        const res = await request('/health');
+        assert.strictEqual(res.status, 503);
+        assert.ok(res.headers['content-type'].includes('application/json'));
+        const json = JSON.parse(res.body);
+        assert.deepStrictEqual(json, { status: 'error' });
+        assert.strictEqual('timestamp' in json, false, 'should not contain timestamp');
+        assert.strictEqual('version' in json, false, 'should not contain version');
+        assert.strictEqual('db' in json, false, 'should not contain db');
+        assert.strictEqual('error' in json, false, 'should not contain error');
+      } finally {
+        initDb();
+      }
+    });
+
+    it('does not affect existing public endpoints', async () => {
+      const home = await request('/');
+      assert.strictEqual(home.status, 200);
+      assert.ok(home.headers['content-type'].includes('text/html'));
+      const api = await request('/api/events?alias=today');
+      assert.strictEqual(api.status, 401);
     });
   });
 });

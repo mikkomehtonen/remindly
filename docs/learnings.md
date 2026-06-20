@@ -16,6 +16,14 @@
 
 ---
 
+## Integration tests bind to a fixed port — 3099 is occupied in this environment
+**Date**: 2026-06-20
+**Area**: testing
+**What happened**: The API integration tests in `tests/api.test.js` start a real server on a fixed port. The original port `3099` was already occupied by a system service in this environment, causing the `before` hook to hang silently because `server.on('listening', done)` never fired.
+**Takeaway**: When working in this environment, set the integration test port to a free high port (e.g., `9999`) in both `BASE` and `process.env.PORT`. If tests hang before running any API cases, check `ss -tln` for port conflicts before debugging the test logic.
+
+---
+
 ## Code-reviewer catches crash-safety gaps like missing transactions
 **Date**: 2026-06-15
 **Area**: workflow

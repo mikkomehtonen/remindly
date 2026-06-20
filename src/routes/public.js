@@ -59,6 +59,44 @@ router.get('/', (req, res) => {
 
 /**
  * @swagger
+ * /health:
+ *   get:
+ *     summary: Health/readiness check
+ *     description: Verifies the SQLite database is reachable and responsive
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Database is reachable
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: "ok"
+ *       503:
+ *         description: Database is unreachable
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: "error"
+ */
+router.get('/health', (req, res) => {
+  try {
+    getDb().prepare('SELECT 1').get();
+    res.json({ status: 'ok' });
+  } catch {
+    res.status(503).json({ status: 'error' });
+  }
+});
+
+/**
+ * @swagger
  * /api/events:
  *   get:
  *     summary: Query events

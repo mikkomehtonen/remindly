@@ -7,6 +7,7 @@ A lightweight event reminder app for tracking birthdays, name days, holidays, an
 - **Calendar Favicon** — SVG calendar icon served at `/favicon.svg` and referenced in all pages ([story](stories/001-add-favicon/story.md))
 - **Weekday Labels on Week Views** — Two-letter weekday abbreviation (Mo, Tu, etc.) shown next to dates in "This Week" and "Next Week" HTML views ([story](stories/002-weekday-labels-week-views/story.md))
 - **"Other" Event Category** — New "Other" category added to the predefined category list, allowing admins to file events that don't match Birthday, Name Day, Flag Day, Holiday, or Anniversary ([story](stories/003-add-other-category/story.md))
+- **Health Check API** — Unauthenticated `GET /health` readiness endpoint that probes the SQLite database with `SELECT 1` and returns a minimal `{"status":"ok"}` (200) or `{"status":"error"}` (503) JSON response, documented in Swagger ([story](stories/004-add-health-check/story.md))
 
 ## Non-Goals
 
