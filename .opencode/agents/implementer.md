@@ -7,7 +7,7 @@ description: >
   Output: completion report with reviewer SHA verdicts.
 mode: all
 temperature: 0.2
-model: firepass/accounts/fireworks/models/kimi-k2p7-code
+model: fireworks-ai/accounts/fireworks/models/kimi-k2p7-code
 tools:
   question: false
   task: true
