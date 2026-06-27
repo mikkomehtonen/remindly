@@ -33,6 +33,15 @@
       letter-spacing: -0.01em;
       line-height: 1.2;
     }
+    .logo {
+      height: 1.25em;
+      width: 1.25em;
+      vertical-align: middle;
+      margin-right: 0.25em;
+    }
+    .logo-link {
+      text-decoration: none;
+    }
     header a {
       color: #6a9e7e;
       text-decoration: none;
@@ -148,7 +157,7 @@
 </head>
 <body>
   <header>
-    <h1><a href="/admin">Dashboard</a> / <%= event ? 'Edit Event' : 'New Event' %></h1>
+    <h1><%- include('../partials/logo') %><a href="/admin">Dashboard</a> / <%= event ? 'Edit Event' : 'New Event' %></h1>
   </header>
   <main>
     <% if (errors && errors.length > 0) { %>

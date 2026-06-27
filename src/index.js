@@ -30,6 +30,11 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+app.use((req, res, next) => {
+  res.locals.logoLinkUrl = process.env.LOGO_LINK_URL || '';
+  next();
+});
+
 app.use(apiKeyGuard);
 app.use('/', publicRoutes);
 app.use('/', adminRoutes);

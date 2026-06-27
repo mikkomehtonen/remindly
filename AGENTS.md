@@ -61,6 +61,7 @@ tests/
 | `API_KEYS` | Comma-separated valid API keys for public API |
 | `PORT` | Default `3000` |
 | `NODE_ENV` | `development` or `production` |
+| `LOGO_LINK_URL` | Optional. URL the header logo links to; if unset, logo is shown without a link |
 
 `.env` files are gitignored. Copy `.env.example` to `.env` and fill in your values.
 

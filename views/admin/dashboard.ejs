@@ -36,6 +36,15 @@
       letter-spacing: -0.01em;
       line-height: 1.2;
     }
+    .logo {
+      height: 1.25em;
+      width: 1.25em;
+      vertical-align: middle;
+      margin-right: 0.25em;
+    }
+    .logo-link {
+      text-decoration: none;
+    }
     nav { display: flex; align-items: center; gap: 16px; }
     nav a {
       color: #7a7470;
@@ -130,7 +139,7 @@
 </head>
 <body>
   <header>
-    <h1>Dashboard</h1>
+    <h1><%- include('../partials/logo') %>Dashboard</h1>
     <nav>
       <a href="/">Public Site</a>
       <form method="POST" action="/admin/logout" style="display:inline;">

@@ -19,6 +19,7 @@ npm start
 | `API_KEYS`      | Comma-separated valid API keys             |
 | `PORT`          | Server port (default 3000)                 |
 | `NODE_ENV`      | `development` or `production`              |
+| `LOGO_LINK_URL` | Optional. URL the header logo links to; if unset, logo is shown without a link |
 
 ## Running
 

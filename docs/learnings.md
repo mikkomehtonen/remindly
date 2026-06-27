@@ -31,3 +31,11 @@
 **Takeaway**: Any multi-step DDL sequence in `better-sqlite3` must be wrapped in `db.transaction(() => { … })()` for atomicity. Run this pattern proactively when writing schema migrations to avoid review loops.
 
 ---
+
+## better-sqlite3 native module may need rebuild after Node version changes
+**Date**: 2026-06-27
+**Area**: build
+**What happened**: `npm test` failed immediately with `ERR_DLOPEN_FAILED` because `better_sqlite3.node` was compiled against Node module version 137 while the runtime required version 147. `npm install` reported "up to date" and did not rebuild the native binding; only `npm rebuild better-sqlite3` fixed it.
+**Takeaway**: If tests fail with a native module version mismatch for `better-sqlite3`, run `npm rebuild better-sqlite3` (or `npm rebuild`) before debugging test logic. This environment can switch Node versions between sessions, so the binding may be stale even when `node_modules` exists.
+
+---

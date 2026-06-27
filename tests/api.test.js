@@ -125,6 +125,7 @@ describe('API integration', () => {
     process.env.ADMIN_PASSWORD = 'testpass';
     process.env.SESSION_SECRET = 'test-secret';
     process.env.NODE_ENV = 'development';
+    process.env.LOGO_LINK_URL = 'https://example.com';
 
     server = require('../src/index');
     server.on('listening', done);
@@ -370,6 +371,62 @@ describe('API integration', () => {
       otherEvents.forEach((e) => {
         assert.strictEqual(e.category, 'Other');
       });
+    });
+  });
+
+  describe('Logo in page title', () => {
+    let adminCookies;
+
+    before(async () => {
+      adminCookies = await loginAsAdmin();
+    });
+
+    it('renders linked logo on public homepage when LOGO_LINK_URL is set', async () => {
+      const res = await request('/');
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.body.includes('<img src="/favicon.svg"'), 'logo image should be present');
+      assert.ok(res.body.includes('href="https://example.com"'), 'logo should link to LOGO_LINK_URL');
+      assert.ok(res.body.includes('Remindly</h1>'), 'title text should be unchanged');
+    });
+
+    it('renders plain logo on public homepage when LOGO_LINK_URL is unset', async () => {
+      const original = process.env.LOGO_LINK_URL;
+      delete process.env.LOGO_LINK_URL;
+      try {
+        const res = await request('/');
+        assert.strictEqual(res.status, 200);
+        assert.ok(res.body.includes('<img src="/favicon.svg"'), 'logo image should still be present');
+        assert.ok(!res.body.includes('href="https://example.com"'), 'logo should not be a link');
+        assert.ok(res.body.includes('Remindly</h1>'), 'title text should be unchanged');
+      } finally {
+        process.env.LOGO_LINK_URL = original;
+      }
+    });
+
+    it('renders linked logo on admin dashboard', async () => {
+      const res = await request('/admin', {
+        headers: { Cookie: adminCookies },
+      });
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.body.includes('<img src="/favicon.svg"'), 'logo image should be present');
+      assert.ok(res.body.includes('href="https://example.com"'), 'logo should link to LOGO_LINK_URL');
+      assert.ok(res.body.includes('Dashboard</h1>'), 'title text should be unchanged');
+    });
+
+    it('renders linked logo on new event form', async () => {
+      const res = await request('/admin/events/new', {
+        headers: { Cookie: adminCookies },
+      });
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.body.includes('<img src="/favicon.svg"'), 'logo image should be present');
+      assert.ok(res.body.includes('href="https://example.com"'), 'logo should link to LOGO_LINK_URL');
+    });
+
+    it('does not affect favicon link tag or page content on homepage', async () => {
+      const res = await request('/');
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.body.includes('<link rel="icon" type="image/svg+xml" href="/favicon.svg">'));
+      assert.ok(res.body.includes('Events for'));
     });
   });
 
