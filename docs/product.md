@@ -9,6 +9,7 @@ A lightweight event reminder app for tracking birthdays, name days, holidays, an
 - **"Other" Event Category** — New "Other" category added to the predefined category list, allowing admins to file events that don't match Birthday, Name Day, Flag Day, Holiday, or Anniversary ([story](stories/003-add-other-category/story.md))
 - **Health Check API** — Unauthenticated `GET /health` readiness endpoint that probes the SQLite database with `SELECT 1` and returns a minimal `{"status":"ok"}` (200) or `{"status":"error"}` (503) JSON response, documented in Swagger ([story](stories/004-add-health-check/story.md))
 - **Logo in Page Title** — Calendar favicon (`/favicon.svg`) shown to the left of the title text on all header-bearing pages (public home, admin dashboard, event form); the logo links to the URL in `LOGO_LINK_URL` when set, otherwise appears as a plain image ([story](stories/005-add-logo-to-title/story.md))
+- **Public Event API** — The `/api/events` endpoint is publicly accessible without an API key ([story](stories/006-public-event-api/story.md))
 
 ## Non-Goals
 

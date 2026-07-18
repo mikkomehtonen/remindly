@@ -34,7 +34,7 @@ npm test           # Run tests
 
 ### GET /api/events
 
-Requires `x-api-key` header.
+No authentication required.
 
 **Query parameters:**
 - `date` — YYYY-MM-DD date

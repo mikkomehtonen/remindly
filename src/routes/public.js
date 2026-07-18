@@ -102,8 +102,6 @@ router.get('/health', (req, res) => {
  *     summary: Query events
  *     description: Retrieve events filtered by date, alias, or category
  *     tags: [Public API]
- *     security:
- *       - ApiKeyAuth: []
  *     parameters:
  *       - in: query
  *         name: date
@@ -148,8 +146,6 @@ router.get('/health', (req, res) => {
  *                     $ref: '#/components/schemas/Event'
  *       400:
  *         description: Invalid parameters
- *       401:
- *         description: Missing or invalid API key
  *
  * components:
  *   schemas:

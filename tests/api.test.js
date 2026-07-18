@@ -113,6 +113,12 @@ describe('Swagger spec', () => {
     assert.ok(pathItem.responses?.[200]?.content?.['application/json'], 'should document 200 JSON response');
     assert.ok(pathItem.responses?.[503]?.content?.['application/json'], 'should document 503 JSON response');
   });
+
+  it('GET /api/events is documented as a public endpoint without security requirement', () => {
+    const pathItem = swaggerSpec.paths['/api/events']?.get;
+    assert.ok(pathItem, 'GET /api/events should be documented');
+    assert.strictEqual(pathItem.security, undefined, 'should not require authentication');
+  });
 });
 
 describe('API integration', () => {
@@ -135,15 +141,20 @@ describe('API integration', () => {
     server.close();
   });
 
-  it('returns 401 without API key', async () => {
+  it('returns 200 without API key', async () => {
     const res = await request('/api/events?alias=today');
-    assert.strictEqual(res.status, 401);
+    assert.strictEqual(res.status, 200);
   });
 
-  it('returns 401 with invalid API key', async () => {
+  it('returns 200 with invalid API key', async () => {
     const res = await request('/api/events?alias=today', {
       headers: { 'x-api-key': 'wrong-key' },
     });
+    assert.strictEqual(res.status, 200);
+  });
+
+  it('returns 401 for other /api/ routes without API key', async () => {
+    const res = await request('/api/unknown');
     assert.strictEqual(res.status, 401);
   });
 
@@ -466,7 +477,7 @@ describe('API integration', () => {
       assert.strictEqual(home.status, 200);
       assert.ok(home.headers['content-type'].includes('text/html'));
       const api = await request('/api/events?alias=today');
-      assert.strictEqual(api.status, 401);
+      assert.strictEqual(api.status, 200);
     });
   });
 });

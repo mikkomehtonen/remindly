@@ -10,6 +10,11 @@ function apiKeyGuard(req, res, next) {
     return next();
   }
 
+  // /api/events is public and does not require an API key
+  if (req.path === '/api/events') {
+    return next();
+  }
+
   const key = req.get('x-api-key');
   if (!key || !VALID_KEYS.has(key)) {
     return res.status(401).json({ error: 'Missing or invalid API key' });
