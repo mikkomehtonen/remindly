@@ -73,3 +73,9 @@ No authentication required.
 | GET /admin/events/:id/edit| Edit event form      |
 | PUT /admin/events/:id     | Update event         |
 | DELETE /admin/events/:id  | Delete event         |
+
+### Public HTML routes
+
+| Path                           | Description                              |
+|--------------------------------|------------------------------------------|
+| POST /packing/items/:id/packed | Toggle a Travel event packing item — public, CSRF-protected |

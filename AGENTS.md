@@ -67,11 +67,13 @@ tests/
 
 `.env` files are gitignored. Copy `.env.example` to `.env` and fill in your values.
 
-## Database Schema (single table)
+## Database Schema (two tables)
 
-- `events` — `id`, `title`, `description`, `category` (CHECK: `Birthday`, `Name Day`, `Flag Day`, `Holiday`, `Anniversary`, `Other`), `is_recurring` (0 or 1), `month`/`day` (for recurring), `event_date` (YYYY-MM-DD for one-time), `created_at`, `updated_at`
+- `events` — `id`, `title`, `description`, `category` (CHECK: `Birthday`, `Name Day`, `Flag Day`, `Holiday`, `Anniversary`, `Other`, `Travel`), `is_recurring` (0 or 1), `month`/`day` (for recurring), `event_date` (YYYY-MM-DD for one-time), `created_at`, `updated_at`
+- `event_packing_items` — `id`, `event_id` (`REFERENCES events(id) ON DELETE CASCADE`), `label`, `packed` (0 or 1, CHECK), `created_at`, `updated_at`
 - **No `users` table.** Admin is env-only.
 - Invariant: `is_recurring=1` → `month`+`day` set, `event_date` null; `is_recurring=0` → opposite.
+- Packing invariant: `packed` ∈ {0,1}; child rows cascade-delete with their event (`PRAGMA foreign_keys=ON`); items are only ever authored/synced for `Travel` events — switching an event's category away from Travel hides the rows but never deletes them.
 
 ## API Behavior
 
@@ -82,6 +84,7 @@ tests/
 - `next_week` envelope: `{ startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", events: [...] }`
 - Recurring events match by `(month, day)` projected onto the query year; one-time events match `event_date` directly.
 - SQL approach: **two separate queries** (recurring + fixed) concatenated in JS. Do not try to unify them into one clever SQL query.
+- The JSON API is untouched by the packing-list feature: no `packingItems`/`packed` keys anywhere in `GET /api/events`. Items are attached to the HTML view only, via `attachPackingItems()` in the `GET /` handler (`src/routes/public.js`).
 
 ## Admin Routes & Auth
 
@@ -90,6 +93,8 @@ tests/
 - Logout POST destroys session.
 - CRUD: `GET/POST /admin/events`, `GET/PUT/DELETE /admin/events/:id`
 - Forms are server-rendered EJS with CSRF tokens (via custom middleware).
+- Packing items are authored inside the one event form via index-aligned `packing_items[]` / `packing_item_ids[]` arrays; server-side sync runs only when the submitted `category === 'Travel'`.
+- Public packing toggle: `POST /packing/items/:id/packed` — no API key, protected by `csrfProtection` applied as **route-level** middleware; `csrfProtection` now also runs on `GET /` (anonymous visitors get a session holding the CSRF token). `returnTo` is allowlisted to `/` or `/?alias=<known alias>` — anything else redirects to `/`.
 
 ## Code Quality
 
@@ -121,7 +126,10 @@ Run `lint -> format -> test` before pushing. CI should enforce the same order.
 - API keys are env-only — no key management UI.
 - **`cookie-parser` is an explicit dependency** — added when replacing `csurf` with custom CSRF middleware.
 - **SQLite CHECK constraint migrations use rebuild-and-copy via `db.transaction()`.** SQLite does not support `ALTER TABLE … ALTER CONSTRAINT`. To change a CHECK, create a new table, copy rows with a **named column list** (not `SELECT *`, so legacy column order can't shuffle values), drop the old table, and rename. Always wrap the DDL sequence in `db.transaction(() => { … })()` for crash safety — without it, a process crash between `DROP TABLE` and `ALTER TABLE … RENAME` orphans the data.
+- **Turn `foreign_keys` OFF around a rebuild-and-copy `DROP TABLE`.** With FKs ON, `DROP TABLE parent` runs an implicit `DELETE FROM parent` that fires children's `ON DELETE CASCADE` — `migrateCategoryConstraint` would silently wipe every `event_packing_items` row. Toggle the pragma **outside** the transaction (it is a no-op inside one) and restore ON in a `finally`.
 - **Share DDL between table creation and migration.** Column definitions are generated from the single `EVENTS_COLUMNS` name/def list in `src/db/connection.js` — `EVENTS_TABLE_COLUMNS` (DDL text) and `EVENTS_COLUMN_NAMES` (migration INSERT/SELECT) both derive from it. Add/rename columns only by editing `EVENTS_COLUMNS`.
 - **Pin generated-schema shape with `PRAGMA table_info`.** DDL derived from config (e.g., `CHECK` built from `VALID_CATEGORIES`) is only drift-proof if tests assert the full `name:type` column list, not just the CHECK clause text. Transcribing hand-written DDL into a generated column list once silently dropped `INTEGER`/`TEXT` on `month`/`day`/`event_date`; `EXPECTED_COLUMN_TYPES` in `tests/connection.test.js` now guards this on the fresh `initDb` schema and every rebuild path.
 - **Integration tests must never touch the real `data/remindly.db`.** Set `process.env.DB_FILE` to a throwaway file (e.g., `data/test-api.db`) **before** `require('../src/index')`, and tear down by deleting the file — never by `DELETE`-ing rows matched on title. A title-based cleanup in `api.test.js` once destroyed production data on every run.
 - **Time-zone-sensitive tests must match the server's timezone.** The server resolves date aliases (`today`, `tomorrow`, etc.) in `Europe/Helsinki`. Tests that compute month/day for recurring events must also use Helsinki timezone via `new Date().toLocaleString('en-US', { timeZone: 'Europe/Helsinki' })`, not `new Date()`.
+- **`GET /` now sets a `connect.sid` cookie for anonymous visitors** (csrfProtection runs there to seed the CSRF token for packing forms). A new `Set-Cookie` on `/` responses is expected behavior, not a regression.
+- **Packing item order is one SQL rule, never JS re-sorting:** public pages/toggle re-render use `ORDER BY packed ASC, id ASC` (packed last), the admin form uses `ORDER BY id ASC`. Tie-breaking on `id` is deliberate — `datetime('now')` has one-second resolution, so ordering by pack time makes HTML-order assertions flaky.

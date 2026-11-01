@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { getDb, initDb } = require('../src/db/connection');
 const { VALID_CATEGORIES } = require('../src/config/categories');
-const { resolveDate } = require('../src/utils/dateMath');
+const { resolveDate, formatDate } = require('../src/utils/dateMath');
 
 const BASE = 'http://localhost:9999';
 
@@ -100,6 +100,18 @@ async function createRecurringEvent(cookies, { title, category }) {
     },
     body: `title=${encodeURIComponent(title)}&category=${encodeURIComponent(category)}&is_recurring=1&month=${month}&day=${day}&_csrf=${csrfToken}`,
   });
+}
+
+/**
+ * Slice one event card out of the public page HTML by title anchor, so packing
+ * assertions target a single card even with other fixtures on the page.
+ */
+function cardSlice(body, title) {
+  const at = body.indexOf(`<h3>${title}</h3>`);
+  assert.ok(at >= 0, `event card for "${title}" must be present`);
+  const start = body.lastIndexOf('<div class="event-card">', at);
+  const next = body.indexOf('<div class="event-card">', at);
+  return body.slice(start, next === -1 ? body.length : next);
 }
 
 describe('Swagger spec', () => {
@@ -514,6 +526,609 @@ describe('API integration', () => {
         otherCategoryEvents.length > 0,
         'Expected non-Travel events rendered alongside Travel events',
       );
+    });
+  });
+
+  describe('Travel packing list — admin editor', () => {
+    let adminCookies;
+
+    before(async () => {
+      adminCookies = await loginAsAdmin();
+    });
+
+    function formBody(fields) {
+      const parts = [];
+      const append = (k, v) => parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+      for (const [key, value] of Object.entries(fields)) {
+        if (Array.isArray(value)) value.forEach((v) => append(key, v));
+        else append(key, value);
+      }
+      return parts.join('&');
+    }
+
+    function eventIdByTitle(title) {
+      const row = getDb().prepare('SELECT id FROM events WHERE title = ?').get(title);
+      assert.ok(row, `fixture event "${title}" must exist`);
+      return row.id;
+    }
+
+    function itemsOf(eventId) {
+      return getDb()
+        .prepare(
+          'SELECT id, label, packed FROM event_packing_items WHERE event_id = ? ORDER BY id ASC',
+        )
+        .all(eventId);
+    }
+
+    async function csrfFor(pathUrl, cookies) {
+      const page = await request(pathUrl, { headers: { Cookie: cookies } });
+      const token = extractCsrf(page.body);
+      assert.ok(token, `CSRF token must be present on ${pathUrl}`);
+      return token;
+    }
+
+    async function createTravelEvent(title, { items = [], ids = [] } = {}) {
+      const token = await csrfFor('/admin/events/new', adminCookies);
+      const { month, day } = todayMonthDay();
+      return request('/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: adminCookies },
+        body: formBody({
+          title,
+          category: 'Travel',
+          is_recurring: 1,
+          month,
+          day,
+          'packing_items[]': items,
+          'packing_item_ids[]': ids,
+          _csrf: token,
+        }),
+      });
+    }
+
+    async function putTravelEvent(eventId, { title, items = [], ids = [], category = 'Travel' }) {
+      const token = await csrfFor(`/admin/events/${eventId}/edit`, adminCookies);
+      const { month, day } = todayMonthDay();
+      return request(`/admin/events/${eventId}?_method=PUT`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: adminCookies },
+        body: formBody({
+          title,
+          category,
+          is_recurring: 1,
+          month,
+          day,
+          'packing_items[]': items,
+          'packing_item_ids[]': ids,
+          _csrf: token,
+        }),
+      });
+    }
+
+    it('creates a Travel event with two items in submission order, all unpacked', async () => {
+      const res = await createTravelEvent('Packing Create Trip', {
+        items: ['Passport', 'Toothbrush'],
+      });
+      assert.strictEqual(res.status, 302);
+      assert.strictEqual(res.headers.location, '/admin');
+      const items = itemsOf(eventIdByTitle('Packing Create Trip'));
+      assert.strictEqual(items.length, 2);
+      assert.deepStrictEqual(items.map((i) => i.label), ['Passport', 'Toothbrush']);
+      items.forEach((i) => assert.strictEqual(i.packed, 0, 'new items start unpacked'));
+      assert.ok(items[0].id < items[1].id, 'ids must follow submission order');
+    });
+
+    it('blank and whitespace-only rows produce no items and no error', async () => {
+      const res = await createTravelEvent('Packing Blank Rows', {
+        items: ['Charger', '', '   '],
+      });
+      assert.strictEqual(res.status, 302);
+      const items = itemsOf(eventIdByTitle('Packing Blank Rows'));
+      assert.strictEqual(items.length, 1);
+      assert.strictEqual(items[0].label, 'Charger');
+    });
+
+    it('PUT renames a row, deletes an omitted row, and inserts a new label', async () => {
+      const create = await createTravelEvent('Packing Edit Trip', {
+        items: ['Camera', 'Sunglasses'],
+      });
+      assert.strictEqual(create.status, 302);
+      const eventId = eventIdByTitle('Packing Edit Trip');
+      const before = itemsOf(eventId);
+
+      const res = await putTravelEvent(eventId, {
+        title: 'Packing Edit Trip',
+        ids: [before[0].id],
+        items: ['Action camera', 'Rain shell'],
+      });
+      assert.strictEqual(res.status, 302);
+      assert.strictEqual(res.headers.location, '/admin');
+
+      const after = itemsOf(eventId);
+      assert.strictEqual(after.length, 2, 'item count must match submission');
+      assert.strictEqual(after[0].id, before[0].id, 'renamed row keeps its id');
+      assert.strictEqual(after[0].label, 'Action camera', 'renamed label persisted');
+      assert.ok(after.some((i) => i.label === 'Rain shell'), 'new label inserted');
+      assert.ok(!after.some((i) => i.label === 'Sunglasses'), 'omitted id deleted from DB');
+    });
+
+    it('PUT clearing an existing item text deletes it, keeping the rest of ids and order', async () => {
+      const create = await createTravelEvent('Packing Delete Trip', {
+        items: ['First', 'Second', 'Third'],
+      });
+      assert.strictEqual(create.status, 302);
+      const eventId = eventIdByTitle('Packing Delete Trip');
+      const before = itemsOf(eventId);
+
+      const res = await putTravelEvent(eventId, {
+        title: 'Packing Delete Trip',
+        ids: [before[0].id, '', before[2].id],
+        items: ['First', '', 'Third'],
+      });
+      assert.strictEqual(res.status, 302);
+
+      const after = itemsOf(eventId);
+      assert.deepStrictEqual(after.map((i) => i.label), ['First', 'Third']);
+      assert.deepStrictEqual(after.map((i) => i.id), [before[0].id, before[2].id]);
+    });
+
+    it('rejects a packing_item_ids value belonging to another event and changes nothing', async () => {
+      const a = await createTravelEvent('Packing Tamper A', { items: ['Alpha'] });
+      const b = await createTravelEvent('Packing Tamper B', { items: ['Beta'] });
+      assert.strictEqual(a.status, 302);
+      assert.strictEqual(b.status, 302);
+      const idA = eventIdByTitle('Packing Tamper A');
+      const idB = eventIdByTitle('Packing Tamper B');
+      const itemsA = itemsOf(idA);
+      const itemsB = itemsOf(idB);
+
+      const res = await putTravelEvent(idA, {
+        title: 'Packing Tamper A',
+        ids: [itemsB[0].id],
+        items: ['Hijacked'],
+      });
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.body.includes('Unknown packing item'));
+      assert.deepStrictEqual(itemsOf(idA), itemsA, 'submitted event items unchanged');
+      assert.deepStrictEqual(itemsOf(idB), itemsB, 'victim event items unchanged');
+    });
+
+    it('rejects a submitted item id on create and creates no event and no items', async () => {
+      const eventsBefore = getDb().prepare('SELECT COUNT(*) as cnt FROM events').get().cnt;
+      const itemsBefore = getDb()
+        .prepare('SELECT COUNT(*) as cnt FROM event_packing_items')
+        .get().cnt;
+
+      const res = await createTravelEvent('Packing Create Junk Id', {
+        items: ['Passport'],
+        ids: [1],
+      });
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.body.includes('Unknown packing item'));
+      assert.strictEqual(
+        getDb().prepare('SELECT COUNT(*) as cnt FROM events').get().cnt,
+        eventsBefore,
+        'no event created',
+      );
+      assert.strictEqual(
+        getDb().prepare('SELECT COUNT(*) as cnt FROM event_packing_items').get().cnt,
+        itemsBefore,
+        'no items created',
+      );
+    });
+
+    it('rejects a 201-character label and leaves event fields and items unchanged', async () => {
+      const create = await createTravelEvent('Packing Long Label', { items: ['Socks'] });
+      assert.strictEqual(create.status, 302);
+      const eventId = eventIdByTitle('Packing Long Label');
+      const eventBefore = getDb().prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+      const itemsBefore = itemsOf(eventId);
+
+      const res = await putTravelEvent(eventId, {
+        title: 'Packing Long Label Renamed',
+        ids: [itemsBefore[0].id],
+        items: ['x'.repeat(201)],
+      });
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.body.includes('Packing item labels must be 200 characters or fewer'));
+      assert.deepStrictEqual(
+        getDb().prepare('SELECT * FROM events WHERE id = ?').get(eventId),
+        eventBefore,
+        'event fields unchanged',
+      );
+      assert.deepStrictEqual(itemsOf(eventId), itemsBefore, 'items unchanged');
+    });
+
+    it('rejects 51 non-blank labels and creates no items', async () => {
+      const eventsBefore = getDb().prepare('SELECT COUNT(*) as cnt FROM events').get().cnt;
+      const itemsBefore = getDb()
+        .prepare('SELECT COUNT(*) as cnt FROM event_packing_items')
+        .get().cnt;
+
+      const res = await createTravelEvent('Packing Too Many', {
+        items: Array.from({ length: 51 }, (_, i) => `Item ${i + 1}`),
+      });
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.body.includes('A travel event can have at most 50 packing items'));
+      assert.strictEqual(
+        getDb().prepare('SELECT COUNT(*) as cnt FROM events').get().cnt,
+        eventsBefore,
+      );
+      assert.strictEqual(
+        getDb().prepare('SELECT COUNT(*) as cnt FROM event_packing_items').get().cnt,
+        itemsBefore,
+        'no items created',
+      );
+    });
+
+    it('switching category from Travel to Other keeps all item rows (hidden, not deleted)', async () => {
+      const create = await createTravelEvent('Packing Category Switch', {
+        items: ['Gear One', 'Gear Two', 'Gear Three'],
+      });
+      assert.strictEqual(create.status, 302);
+      const eventId = eventIdByTitle('Packing Category Switch');
+      const itemsBefore = itemsOf(eventId);
+
+      const res = await putTravelEvent(eventId, {
+        title: 'Packing Category Switch',
+        category: 'Other',
+        ids: itemsBefore.map((i) => i.id),
+        items: ['Gear One', 'Gear Two', 'Gear Three'],
+      });
+      assert.strictEqual(res.status, 302);
+      assert.strictEqual(
+        getDb().prepare('SELECT category FROM events WHERE id = ?').get(eventId).category,
+        'Other',
+      );
+      const after = itemsOf(eventId);
+      assert.strictEqual(after.length, 3, 'all 3 item rows must still be present');
+      assert.deepStrictEqual(after.map((i) => i.label), ['Gear One', 'Gear Two', 'Gear Three']);
+    });
+
+    it('edit page for the Other event keeps the packing block present but unrevealed', async () => {
+      const eventId = eventIdByTitle('Packing Category Switch');
+      const page = await request(`/admin/events/${eventId}/edit`, {
+        headers: { Cookie: adminCookies },
+      });
+      assert.strictEqual(page.status, 200);
+      assert.ok(page.body.includes('class="packing-fields"'), 'packing block markup present');
+      assert.ok(!page.body.includes('packing-fields active'), 'block must not be revealed');
+      assert.match(page.body, /value="Other"[^>]*selected/, 'Other option marked selected');
+    });
+
+    it('re-submitting category=Travel with the same ids preserves rows without delete/reinsert churn', async () => {
+      const eventId = eventIdByTitle('Packing Category Switch');
+      const itemsBefore = itemsOf(eventId);
+
+      const res = await putTravelEvent(eventId, {
+        title: 'Packing Category Switch',
+        category: 'Travel',
+        ids: itemsBefore.map((i) => i.id),
+        items: ['Gear One', 'Gear Two', 'Gear Three'],
+      });
+      assert.strictEqual(res.status, 302);
+      const after = itemsOf(eventId);
+      assert.deepStrictEqual(
+        after.map((i) => i.id),
+        itemsBefore.map((i) => i.id),
+        'original ids preserved',
+      );
+      assert.strictEqual(
+        getDb().prepare('SELECT category FROM events WHERE id = ?').get(eventId).category,
+        'Travel',
+      );
+    });
+  });
+
+  describe('Travel packing list — public page', () => {
+    let travelEventId;
+
+    before(() => {
+      const db = getDb();
+      const { month, day } = todayMonthDay();
+      const insertEvent = (title, category, isRecurring, monthVal, dayVal, eventDate) =>
+        db
+          .prepare(
+            `INSERT INTO events (title, description, category, is_recurring, month, day, event_date)
+             VALUES (?, NULL, ?, ?, ?, ?, ?)`,
+          )
+          .run(title, category, isRecurring, monthVal, dayVal, eventDate).lastInsertRowid;
+      const addItem = (eventId, label, packed) =>
+        db
+          .prepare('INSERT INTO event_packing_items (event_id, label, packed) VALUES (?, ?, ?)')
+          .run(eventId, label, packed).lastInsertRowid;
+
+      travelEventId = insertEvent('Lapland Render Trip', 'Travel', 1, month, day, null);
+      const emptyTravelId = insertEvent('Zero Items Trip', 'Travel', 1, month, day, null);
+      const holidayId = insertEvent('Holiday With Items Trip', 'Holiday', 1, month, day, null);
+      const nextWeekId = insertEvent(
+        'Next Week Render Trip',
+        'Travel',
+        0,
+        null,
+        null,
+        formatDate(resolveDate('next_week').startDate),
+      );
+
+      addItem(travelEventId, 'Render Item A', 0);
+      addItem(travelEventId, 'Render Item B', 1);
+      addItem(travelEventId, 'Render Item C', 0);
+      addItem(travelEventId, 'Passport <script>x</script>', 0);
+      addItem(holidayId, 'Holiday Only Item', 0);
+      addItem(nextWeekId, 'Sunglasses Render', 0);
+      assert.ok(emptyTravelId, 'zero-item fixture created');
+    });
+
+    it('renders the list with unpacked items first (id order) and packed last', async () => {
+      const res = await request('/');
+      assert.strictEqual(res.status, 200);
+      const card = cardSlice(res.body, 'Lapland Render Trip');
+      assert.ok(card.includes('class="packing-list"'), 'packing list markup present');
+      assert.ok(card.includes('Packing list'), 'packing list heading present');
+      const posA = card.indexOf('Render Item A');
+      const posC = card.indexOf('Render Item C');
+      const posB = card.indexOf('Render Item B');
+      assert.ok(posA >= 0 && posC >= 0 && posB >= 0, 'all labels rendered');
+      assert.ok(posA < posC, 'unpacked items in id ascending order');
+      assert.ok(posC < posB, 'packed item rendered last');
+    });
+
+    it('marks the packed item with packed class + checked, styled faded and struck-through', async () => {
+      const res = await request('/');
+      const card = cardSlice(res.body, 'Lapland Render Trip');
+      assert.strictEqual(
+        card.split('<li class="packing-item packed">').length - 1,
+        1,
+        'exactly one packed li',
+      );
+      const packedStart = card.indexOf('<li class="packing-item packed">');
+      const packedLi = card.slice(packedStart, card.indexOf('Render Item B') + 'Render Item B'.length);
+      assert.ok(packedLi.includes('checked'), 'packed checkbox is checked');
+
+      const rule = res.body.match(/\.packing-item\.packed label\s*\{([^}]*)\}/);
+      assert.ok(rule, '.packing-item.packed label CSS rule must exist');
+      assert.ok(rule[1].includes('text-decoration: line-through'), 'struck through');
+      assert.ok(/color:\s*#[0-9a-fA-F]{6}/.test(rule[1]), 'muted color');
+    });
+
+    it('every item form carries an extractable _csrf hidden input and a packed checkbox', async () => {
+      const res = await request('/');
+      const card = cardSlice(res.body, 'Lapland Render Trip');
+      assert.ok(/name="_csrf"\s+value="[^"]+"/.test(card), 'extractCsrf attribute order');
+      assert.strictEqual(card.split('name="_csrf" value="').length - 1, 4);
+      assert.strictEqual(card.split('type="checkbox" name="packed"').length - 1, 4);
+    });
+
+    it('renders no packing markup for a Travel event with zero items or a non-Travel event with items', async () => {
+      const res = await request('/');
+      const emptyCard = cardSlice(res.body, 'Zero Items Trip');
+      assert.ok(!emptyCard.includes('packing-list'));
+      assert.ok(!emptyCard.includes('Packing list'));
+      const holidayCard = cardSlice(res.body, 'Holiday With Items Trip');
+      assert.ok(!holidayCard.includes('packing-list'));
+      assert.ok(!holidayCard.includes('Packing list'));
+    });
+
+    it('escapes item labels', async () => {
+      const res = await request('/');
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.body.includes('Passport &lt;script&gt;x&lt;/script&gt;'));
+      assert.ok(!res.body.includes('<script>x</script>'));
+    });
+
+    it('leaves the JSON API payload shape byte-for-byte unchanged', async () => {
+      const res = await request('/api/events?alias=today');
+      assert.strictEqual(res.status, 200);
+      assert.ok(!res.body.includes('packingItems'), 'no packingItems key anywhere');
+      assert.ok(!res.body.includes('"packed"'), 'no packed key anywhere');
+      const travel = JSON.parse(res.body).events.find((e) => e.title === 'Lapland Render Trip');
+      assert.ok(travel, 'fixture event must appear in the API payload');
+      assert.deepStrictEqual(Object.keys(travel), [
+        'id',
+        'title',
+        'description',
+        'category',
+        'displayDate',
+      ]);
+    });
+
+    it('renders items in the next_week view with returnTo pointing at that view', async () => {
+      const res = await request('/?alias=next_week');
+      assert.strictEqual(res.status, 200);
+      const card = cardSlice(res.body, 'Next Week Render Trip');
+      assert.ok(card.includes('Sunglasses Render'), 'next-week items render');
+      assert.ok(card.includes('name="returnTo" value="/?alias=next_week"'));
+    });
+
+    it('uses returnTo="/" in the today view', async () => {
+      const res = await request('/');
+      const card = cardSlice(res.body, 'Lapland Render Trip');
+      assert.ok(card.includes('name="returnTo" value="/"'));
+    });
+  });
+
+  describe('Travel packing list — toggle route', () => {
+    let firstItemId;
+    let secondItemId;
+
+    before(async () => {
+      const adminCookies = await loginAsAdmin();
+      const createRes = await createRecurringEventWithItems(adminCookies, 'Toggle Trip', [
+        'Passport Toggle',
+        'Visa Toggle',
+      ]);
+      assert.strictEqual(createRes.status, 302);
+      const eventId = getDb().prepare('SELECT id FROM events WHERE title = ?').get('Toggle Trip').id;
+      const items = getDb()
+        .prepare('SELECT id FROM event_packing_items WHERE event_id = ? ORDER BY id ASC')
+        .all(eventId);
+      assert.strictEqual(items.length, 2);
+      firstItemId = items[0].id;
+      secondItemId = items[1].id;
+    });
+
+    async function createRecurringEventWithItems(cookies, title, items) {
+      const formPage = await request('/admin/events/new', { headers: { Cookie: cookies } });
+      const csrfToken = extractCsrf(formPage.body);
+      const { month, day } = todayMonthDay();
+      const itemFields = items
+        .map((i) => `packing_items%5B%5D=${encodeURIComponent(i)}`)
+        .join('&');
+      return request('/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookies },
+        body: `title=${encodeURIComponent(title)}&category=Travel&is_recurring=1&month=${month}&day=${day}&${itemFields}&_csrf=${csrfToken}`,
+      });
+    }
+
+    function packedValue(itemId) {
+      return getDb().prepare('SELECT packed FROM event_packing_items WHERE id = ?').get(itemId)
+        .packed;
+    }
+
+    // A fresh cookie jar = a fresh visitor session with its own CSRF token.
+    async function newVisitor() {
+      const home = await request('/');
+      assert.strictEqual(home.status, 200);
+      return { cookies: parseCookies(home), csrf: extractCsrf(home.body) };
+    }
+
+    async function postToggle(itemId, visitor, { packed, returnTo } = {}) {
+      const parts = [`_csrf=${encodeURIComponent(visitor.csrf)}`];
+      if (packed !== undefined) parts.push(packed);
+      if (returnTo !== undefined) parts.push(`returnTo=${encodeURIComponent(returnTo)}`);
+      return request(`/packing/items/${itemId}/packed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: visitor.cookies },
+        body: parts.join('&'),
+      });
+    }
+
+    it('sets connect.sid for anonymous visitors and exposes an extractable _csrf token', async () => {
+      const home = await request('/');
+      assert.strictEqual(home.status, 200);
+      const setCookie = home.headers['set-cookie'];
+      assert.ok(setCookie, 'Set-Cookie header expected');
+      const joined = Array.isArray(setCookie) ? setCookie.join('\n') : String(setCookie);
+      assert.ok(joined.includes('connect.sid'), 'anonymous visitors get a session cookie');
+      assert.ok(extractCsrf(home.body), 'packing form carries an extractable _csrf token');
+    });
+
+    it('ticks an item: 302 to /, packed=1 in DB, rendered last as packed and checked', async () => {
+      const visitor = await newVisitor();
+      const res = await postToggle(firstItemId, visitor, { packed: 'packed=0&packed=1' });
+      assert.strictEqual(res.status, 302);
+      assert.strictEqual(res.headers.location, '/');
+      assert.strictEqual(packedValue(firstItemId), 1);
+
+      const home = await request('/');
+      const card = cardSlice(home.body, 'Toggle Trip');
+      assert.ok(
+        card.indexOf('Visa Toggle') < card.indexOf('Passport Toggle'),
+        'packed item renders after the unpacked one',
+      );
+      const packedStart = card.indexOf('<li class="packing-item packed">');
+      assert.ok(packedStart >= 0, 'packed class present');
+      const packedLi = card.slice(packedStart, card.indexOf('Passport Toggle') + 'Passport Toggle'.length);
+      assert.ok(packedLi.includes('checked'));
+    });
+
+    it('unticks a packed item: 302, packed=0, back in id order with no packed styling', async () => {
+      const visitor = await newVisitor();
+      const res = await postToggle(firstItemId, visitor, { packed: 'packed=0' });
+      assert.strictEqual(res.status, 302);
+      assert.strictEqual(packedValue(firstItemId), 0);
+
+      const home = await request('/');
+      const card = cardSlice(home.body, 'Toggle Trip');
+      assert.ok(
+        card.indexOf('Passport Toggle') < card.indexOf('Visa Toggle'),
+        'back in id order among unpacked items',
+      );
+      assert.ok(!card.includes('packing-item packed'), 'no packed class');
+      assert.ok(!card.includes('checked'), 'no checked attribute');
+    });
+
+    it('rejects no-cookie and wrong-token requests with 403, leaving the row unchanged', async () => {
+      const visitor = await newVisitor();
+      const noCookie = await request(`/packing/items/${secondItemId}/packed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `_csrf=${encodeURIComponent(visitor.csrf)}&packed=0&packed=1`,
+      });
+      assert.strictEqual(noCookie.status, 403);
+      assert.ok(noCookie.body.includes('Invalid CSRF token'));
+
+      const wrongToken = await postToggle(secondItemId, { cookies: visitor.cookies, csrf: 'bogus' }, {
+        packed: 'packed=0&packed=1',
+      });
+      assert.strictEqual(wrongToken.status, 403);
+      assert.ok(wrongToken.body.includes('Invalid CSRF token'));
+
+      assert.strictEqual(packedValue(secondItemId), 0, 'row unchanged by rejected requests');
+    });
+
+    it('returns 404 for a missing id and for a non-numeric id', async () => {
+      const visitor = await newVisitor();
+      const missing = await postToggle(999999, visitor, { packed: 'packed=0&packed=1' });
+      assert.strictEqual(missing.status, 404);
+      assert.ok(missing.body.includes('Packing item not found'));
+
+      const junk = await request('/packing/items/not-a-number/packed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: visitor.cookies },
+        body: `_csrf=${encodeURIComponent(visitor.csrf)}&packed=0&packed=1`,
+      });
+      assert.strictEqual(junk.status, 404);
+    });
+
+    it('returns 400 for absent, empty, or junk packed values, leaving the row unchanged', async () => {
+      const visitor = await newVisitor();
+      for (const packed of [undefined, 'packed=', 'packed=maybe']) {
+        const res = await postToggle(secondItemId, visitor, { packed });
+        assert.strictEqual(res.status, 400, `packed=${JSON.stringify(packed)} must be 400`);
+        assert.ok(res.body.includes('Invalid packed value'));
+        assert.strictEqual(packedValue(secondItemId), 0);
+      }
+    });
+
+    it('redirects only to allowlisted returnTo values', async () => {
+      const visitor = await newVisitor();
+      const allowed = await postToggle(secondItemId, visitor, {
+        packed: 'packed=0&packed=1',
+        returnTo: '/?alias=next_week',
+      });
+      assert.strictEqual(allowed.status, 302);
+      assert.strictEqual(allowed.headers.location, '/?alias=next_week');
+
+      const evilVisitor = await newVisitor();
+      const evil = await postToggle(secondItemId, evilVisitor, {
+        packed: 'packed=0',
+        returnTo: '//evil.example',
+      });
+      assert.strictEqual(evil.status, 302);
+      assert.strictEqual(evil.headers.location, '/', 'non-allowlisted returnTo falls back to /');
+    });
+
+    it('shares state across visitors: two cookie jars, second write wins, both views agree', async () => {
+      const alice = await newVisitor();
+      const bob = await newVisitor();
+      assert.ok(alice.cookies && bob.cookies && alice.cookies !== bob.cookies, 'distinct jars');
+
+      const tick = await postToggle(secondItemId, alice, { packed: 'packed=0&packed=1' });
+      assert.strictEqual(tick.status, 302);
+      const untick = await postToggle(secondItemId, bob, { packed: 'packed=0' });
+      assert.strictEqual(untick.status, 302);
+      assert.strictEqual(packedValue(secondItemId), 0, 'second write wins');
+
+      const aliceView = await request('/', { headers: { Cookie: alice.cookies } });
+      const bobView = await request('/', { headers: { Cookie: bob.cookies } });
+      const aliceCard = cardSlice(aliceView.body, 'Toggle Trip');
+      const bobCard = cardSlice(bobView.body, 'Toggle Trip');
+      for (const card of [aliceCard, bobCard]) {
+        assert.ok(!card.includes('packing-item packed'), 'both visitors see the shared unpacked state');
+        assert.ok(card.indexOf('Passport Toggle') < card.indexOf('Visa Toggle'));
+      }
     });
   });
 

@@ -332,3 +332,286 @@ describe('Category migration', () => {
     removeTestDb(outsidePath);
   });
 });
+
+describe('Packing items table', () => {
+  // PRAGMA-level shape guard, same pattern as EXPECTED_COLUMN_TYPES for events.
+  const EXPECTED_PACKING_COLUMN_TYPES = [
+    'id:INTEGER',
+    'event_id:INTEGER',
+    'label:TEXT',
+    'packed:INTEGER',
+    'created_at:TEXT',
+    'updated_at:TEXT',
+  ];
+
+  function packingColumnTypes(db) {
+    return db
+      .prepare('PRAGMA table_info(event_packing_items)')
+      .all()
+      .map((c) => `${c.name}:${c.type}`);
+  }
+
+  function insertEvent(db, title, category) {
+    return db
+      .prepare(
+        'INSERT INTO events (title, category, is_recurring, month, day) VALUES (?, ?, 1, 6, 15)',
+      )
+      .run(title, category).lastInsertRowid;
+  }
+
+  it('fresh initDb creates event_packing_items with pinned schema, index, and working constraints', () => {
+    const freshPath = path.join(__dirname, '..', 'data', 'test-packing-fresh.db');
+    removeTestDb(freshPath);
+
+    delete require.cache[require.resolve('../src/db/connection')];
+    const { initDb } = require('../src/db/connection');
+    const freshDb = initDb({ file: freshPath });
+
+    assert.deepStrictEqual(
+      packingColumnTypes(freshDb),
+      EXPECTED_PACKING_COLUMN_TYPES,
+      'generated schema must declare the expected column types',
+    );
+
+    const indexes = freshDb
+      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_packing_items_event'")
+      .all();
+    assert.strictEqual(indexes.length, 1, 'lookup index idx_packing_items_event must exist');
+
+    // Valid child row: packed defaults to 0
+    const eventId = insertEvent(freshDb, 'City Break', 'Travel');
+    const insert = freshDb
+      .prepare('INSERT INTO event_packing_items (event_id, label) VALUES (?, ?)')
+      .run(eventId, 'Passport');
+    assert.strictEqual(insert.changes, 1);
+    const item = freshDb
+      .prepare('SELECT event_id, label, packed FROM event_packing_items WHERE id = ?')
+      .get(insert.lastInsertRowid);
+    assert.strictEqual(item.packed, 0, 'packed must default to 0');
+    assert.strictEqual(item.event_id, eventId);
+
+    // CHECK constraint rejects packed values outside {0, 1}
+    assert.throws(
+      () =>
+        freshDb
+          .prepare('INSERT INTO event_packing_items (event_id, label, packed) VALUES (?, ?, ?)')
+          .run(eventId, 'Toothbrush', 2),
+      /CHECK constraint failed/,
+    );
+
+    // FK enforcement: no softening (initDb opens with PRAGMA foreign_keys = ON)
+    assert.throws(
+      () =>
+        freshDb
+          .prepare('INSERT INTO event_packing_items (event_id, label) VALUES (?, ?)')
+          .run(4242, 'Ghost item'),
+      /FOREIGN KEY constraint failed/,
+    );
+
+    freshDb.close();
+    removeTestDb(freshPath);
+    delete require.cache[require.resolve('../src/db/connection')];
+  });
+
+  it('ensurePackingItemsTable upgrades a legacy events-only database without touching events', () => {
+    const legacyPath = path.join(__dirname, '..', 'data', 'test-packing-legacy.db');
+    removeTestDb(legacyPath);
+
+    const legacyDb = new Database(legacyPath);
+    legacyDb.pragma('foreign_keys = ON');
+    legacyDb.exec(
+      legacyEventsTableDDL(['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Anniversary', 'Other', 'Travel']),
+    );
+    legacyDb
+      .prepare(
+        'INSERT INTO events (title, category, is_recurring, month, day) VALUES (?, ?, 1, ?, ?)',
+      )
+      .run('Ski Trip', 'Travel', 2, 10);
+    legacyDb
+      .prepare('INSERT INTO events (title, category, is_recurring, event_date) VALUES (?, ?, 0, ?)')
+      .run('Family Reunion', 'Anniversary', '2026-08-01');
+    const eventsBefore = legacyDb.prepare('SELECT * FROM events ORDER BY id').all();
+
+    const { ensurePackingItemsTable } = require('../src/db/connection');
+    ensurePackingItemsTable(legacyDb);
+
+    const table = legacyDb
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='event_packing_items'")
+      .get();
+    assert.ok(table, 'event_packing_items must be created');
+    assert.deepStrictEqual(
+      packingColumnTypes(legacyDb),
+      EXPECTED_PACKING_COLUMN_TYPES,
+      'upgraded schema must match the fresh schema',
+    );
+    assert.strictEqual(
+      legacyDb.prepare('SELECT COUNT(*) as cnt FROM event_packing_items').get().cnt,
+      0,
+      'new table must start empty',
+    );
+
+    // Both events preserved byte-identically, and no rebuild leftovers
+    assert.deepStrictEqual(
+      legacyDb.prepare('SELECT * FROM events ORDER BY id').all(),
+      eventsBefore,
+      'events must survive unchanged',
+    );
+    const strays = legacyDb
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%_new'")
+      .all();
+    assert.strictEqual(strays.length, 0, 'no *_new tables may be left behind');
+
+    legacyDb.close();
+    removeTestDb(legacyPath);
+  });
+
+  it('ensurePackingItemsTable is idempotent when run twice in a row', () => {
+    const twicePath = path.join(__dirname, '..', 'data', 'test-packing-twice.db');
+    removeTestDb(twicePath);
+
+    const d = new Database(twicePath);
+    d.pragma('foreign_keys = ON');
+    d.exec(
+      legacyEventsTableDDL(['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Anniversary', 'Other', 'Travel']),
+    );
+    const { ensurePackingItemsTable } = require('../src/db/connection');
+    ensurePackingItemsTable(d);
+
+    const eventId = insertEvent(d, 'Cabin Weekend', 'Travel');
+    d.prepare('INSERT INTO event_packing_items (event_id, label) VALUES (?, ?)').run(
+      eventId,
+      'Hiking boots',
+    );
+    const schemaBefore = d
+      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='event_packing_items'")
+      .get().sql;
+    const indexesBefore = d
+      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_packing_items_event'")
+      .all().length;
+
+    ensurePackingItemsTable(d);
+
+    const schemaAfter = d
+      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='event_packing_items'")
+      .get().sql;
+    assert.strictEqual(schemaAfter, schemaBefore, 'schema must be untouched on second run');
+    assert.deepStrictEqual(
+      packingColumnTypes(d),
+      EXPECTED_PACKING_COLUMN_TYPES,
+      'column types must be unchanged on second run',
+    );
+    assert.strictEqual(
+      d.prepare('SELECT COUNT(*) as cnt FROM event_packing_items').get().cnt,
+      1,
+      'row count must be unchanged on second run',
+    );
+    const indexesAfter = d
+      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_packing_items_event'")
+      .all().length;
+    assert.strictEqual(indexesAfter, indexesBefore, 'index count must be unchanged');
+
+    d.close();
+    removeTestDb(twicePath);
+  });
+
+  it('category rebuild does not cascade-delete packing items via the DROP TABLE', () => {
+    const migPath = path.join(__dirname, '..', 'data', 'test-packing-migration.db');
+    removeTestDb(migPath);
+
+    const d = new Database(migPath);
+    d.pragma('foreign_keys = ON');
+    // Events table predates Travel, so migrateCategoryConstraint WILL fire the rebuild.
+    d.exec(
+      legacyEventsTableDDL(['Birthday', 'Name Day', 'Flag Day', 'Holiday', 'Anniversary']),
+    );
+    const { migrateCategoryConstraint, ensurePackingItemsTable } = require('../src/db/connection');
+    ensurePackingItemsTable(d);
+
+    const eventId = insertEvent(d, 'Cabin Weekend', 'Birthday');
+    d.prepare('INSERT INTO event_packing_items (event_id, label) VALUES (?, ?)').run(
+      eventId,
+      'Hiking boots',
+    );
+    d.prepare('INSERT INTO event_packing_items (event_id, label) VALUES (?, ?)').run(
+      eventId,
+      'Stove',
+    );
+
+    migrateCategoryConstraint(d);
+
+    // The DROP TABLE events must not trigger ON DELETE CASCADE on the children.
+    assert.deepStrictEqual(
+      d
+        .prepare('SELECT label FROM event_packing_items WHERE event_id = ? ORDER BY id')
+        .all(eventId)
+        .map((r) => r.label),
+      ['Hiking boots', 'Stove'],
+      'packing items must survive the category rebuild',
+    );
+    const schema = d
+      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='events'")
+      .get();
+    assert.ok(schema.sql.includes(CATEGORY_CHECK), 'rebuild must still have fired');
+    // foreign_keys must be back ON after the rebuild: FK enforcement is alive again.
+    assert.strictEqual(
+      d.pragma('foreign_keys', { simple: true }),
+      1,
+      'foreign_keys pragma must be restored to ON',
+    );
+    assert.throws(
+      () =>
+        d
+          .prepare('INSERT INTO event_packing_items (event_id, label) VALUES (?, ?)')
+          .run(4242, 'Ghost item'),
+      /FOREIGN KEY constraint failed/,
+    );
+
+    d.close();
+    removeTestDb(migPath);
+  });
+
+  it('deleting an event cascades to its packing items but not other events', () => {
+    const cascadePath = path.join(__dirname, '..', 'data', 'test-packing-cascade.db');
+    removeTestDb(cascadePath);
+
+    delete require.cache[require.resolve('../src/db/connection')];
+    const { initDb } = require('../src/db/connection');
+    const d = initDb({ file: cascadePath });
+
+    const targetId = insertEvent(d, 'Ski Trip', 'Travel');
+    const otherId = insertEvent(d, 'City Break', 'Travel');
+    d.prepare('INSERT INTO event_packing_items (event_id, label) VALUES (?, ?)').run(
+      targetId,
+      'Skis',
+    );
+    d.prepare('INSERT INTO event_packing_items (event_id, label) VALUES (?, ?)').run(
+      targetId,
+      'Gloves',
+    );
+    d.prepare('INSERT INTO event_packing_items (event_id, label) VALUES (?, ?)').run(
+      otherId,
+      'Passport',
+    );
+
+    d.prepare('DELETE FROM events WHERE id = ?').run(targetId);
+
+    assert.strictEqual(
+      d.prepare('SELECT COUNT(*) as cnt FROM event_packing_items WHERE event_id = ?').get(targetId)
+        .cnt,
+      0,
+      'ON DELETE CASCADE must remove exactly the deleted event children',
+    );
+    const survivors = d
+      .prepare('SELECT label FROM event_packing_items WHERE event_id = ?')
+      .all(otherId);
+    assert.deepStrictEqual(
+      survivors.map((r) => r.label),
+      ['Passport'],
+      "other events' children must stay intact",
+    );
+
+    d.close();
+    removeTestDb(cascadePath);
+    delete require.cache[require.resolve('../src/db/connection')];
+  });
+});

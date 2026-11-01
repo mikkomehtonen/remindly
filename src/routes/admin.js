@@ -241,45 +241,66 @@ router.get('/admin/events/new', ensureAdmin, (req, res) => {
     errors: [],
     categories: VALID_CATEGORIES,
     csrfToken: req.csrfToken(),
+    packingItems: [],
   });
 });
 
 router.post('/admin/events', ensureAdmin, (req, res) => {
   const db = getDb();
   const errors = validateEvent(req.body);
+  const packingRows = parsePackingItems(req.body);
+  const isTravel = req.body.category === 'Travel';
+  if (isTravel) {
+    // Create: no items exist yet, so any submitted id is invalid.
+    errors.push(...validatePackingItems(db, packingRows, null));
+  }
   if (errors.length > 0) {
     return res.render('admin/eventForm', {
       event: req.body,
       errors,
       categories: VALID_CATEGORIES,
       csrfToken: req.csrfToken(),
+      packingItems: packingItemsFromBody(req.body),
     });
   }
 
   const { title, description, category } = req.body;
   const isRecurring = req.body.is_recurring === '1' || req.body.is_recurring === 1;
 
-  if (isRecurring) {
-    db.prepare(
-      `
-      INSERT INTO events (title, description, category, is_recurring, month, day, event_date, created_at, updated_at)
-      VALUES (?, ?, ?, 1, ?, ?, NULL, datetime('now'), datetime('now'))
-    `,
-    ).run(
-      title,
-      description || null,
-      category,
-      parseInt(req.body.month, 10),
-      parseInt(req.body.day, 10),
-    );
-  } else {
-    db.prepare(
-      `
-      INSERT INTO events (title, description, category, is_recurring, month, day, event_date, created_at, updated_at)
-      VALUES (?, ?, ?, 0, NULL, NULL, ?, datetime('now'), datetime('now'))
-    `,
-    ).run(title, description || null, category, req.body.event_date);
-  }
+  const create = db.transaction(() => {
+    let eventId;
+    if (isRecurring) {
+      eventId = db
+        .prepare(
+          `
+          INSERT INTO events (title, description, category, is_recurring, month, day, event_date, created_at, updated_at)
+          VALUES (?, ?, ?, 1, ?, ?, NULL, datetime('now'), datetime('now'))
+        `,
+        )
+        .run(
+          title,
+          description || null,
+          category,
+          parseInt(req.body.month, 10),
+          parseInt(req.body.day, 10),
+        ).lastInsertRowid;
+    } else {
+      eventId = db
+        .prepare(
+          `
+          INSERT INTO events (title, description, category, is_recurring, month, day, event_date, created_at, updated_at)
+          VALUES (?, ?, ?, 0, NULL, NULL, ?, datetime('now'), datetime('now'))
+        `,
+        )
+        .run(title, description || null, category, req.body.event_date).lastInsertRowid;
+    }
+
+    // Category gate is the real enforcement: item fields are synced only for Travel.
+    if (isTravel) {
+      syncPackingItems(db, eventId, packingRows);
+    }
+  });
+  create();
 
   res.redirect('/admin');
 });
@@ -362,11 +383,15 @@ router.get('/admin/events/:id/edit', ensureAdmin, (req, res) => {
   if (!event) {
     return res.status(404).render('error', { message: 'Event not found' });
   }
+  const packingItems = db
+    .prepare('SELECT id, label FROM event_packing_items WHERE event_id = ? ORDER BY id ASC')
+    .all(event.id);
   res.render('admin/eventForm', {
     event,
     errors: [],
     categories: VALID_CATEGORIES,
     csrfToken: req.csrfToken(),
+    packingItems,
   });
 });
 
@@ -377,45 +402,61 @@ router.put('/admin/events/:id', ensureAdmin, (req, res) => {
     return res.status(404).render('error', { message: 'Event not found' });
   }
 
+  const eventId = Number(req.params.id);
   const errors = validateEvent(req.body);
+  const packingRows = parsePackingItems(req.body);
+  const isTravel = req.body.category === 'Travel';
+  if (isTravel) {
+    errors.push(...validatePackingItems(db, packingRows, eventId));
+  }
   if (errors.length > 0) {
     return res.render('admin/eventForm', {
       event: { ...req.body, id: req.params.id },
       errors,
       categories: VALID_CATEGORIES,
       csrfToken: req.csrfToken(),
+      packingItems: packingItemsFromBody(req.body),
     });
   }
 
   const { title, description, category } = req.body;
   const isRecurring = req.body.is_recurring === '1' || req.body.is_recurring === 1;
 
-  if (isRecurring) {
-    db.prepare(
-      `
-      UPDATE events
-      SET title = ?, description = ?, category = ?, is_recurring = 1,
-          month = ?, day = ?, event_date = NULL, updated_at = datetime('now')
-      WHERE id = ?
-    `,
-    ).run(
-      title,
-      description || null,
-      category,
-      parseInt(req.body.month, 10),
-      parseInt(req.body.day, 10),
-      req.params.id,
-    );
-  } else {
-    db.prepare(
-      `
-      UPDATE events
-      SET title = ?, description = ?, category = ?, is_recurring = 0,
-          month = NULL, day = NULL, event_date = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `,
-    ).run(title, description || null, category, req.body.event_date, req.params.id);
-  }
+  const update = db.transaction(() => {
+    if (isRecurring) {
+      db.prepare(
+        `
+        UPDATE events
+        SET title = ?, description = ?, category = ?, is_recurring = 1,
+            month = ?, day = ?, event_date = NULL, updated_at = datetime('now')
+        WHERE id = ?
+      `,
+      ).run(
+        title,
+        description || null,
+        category,
+        parseInt(req.body.month, 10),
+        parseInt(req.body.day, 10),
+        req.params.id,
+      );
+    } else {
+      db.prepare(
+        `
+        UPDATE events
+        SET title = ?, description = ?, category = ?, is_recurring = 0,
+            month = NULL, day = NULL, event_date = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `,
+      ).run(title, description || null, category, req.body.event_date, req.params.id);
+    }
+
+    // Category gate: switching Travel to another category hides the items but
+    // leaves the rows untouched, so switching back restores them.
+    if (isTravel) {
+      syncPackingItems(db, eventId, packingRows);
+    }
+  });
+  update();
 
   res.redirect('/admin');
 });
@@ -452,6 +493,121 @@ function validateEvent(body) {
   }
 
   return errors;
+}
+
+// Packing items ride along in the one event form as two index-aligned parallel
+// arrays: packing_item_ids[] (existing rows only) and packing_items[] (every row).
+// express.urlencoded({ extended: true }) turns repeated name[] into an array;
+// a single submission arrives as a string, hence [].concat.
+// Shared zipper for both consumers below — they must walk the arrays identically,
+// or ids silently misalign with labels on the error re-render.
+function zipPackingRows(body) {
+  const labels = [].concat(body.packing_items || []);
+  const ids = [].concat(body.packing_item_ids || []);
+  const zipped = [];
+  for (let i = 0; i < labels.length; i += 1) {
+    const label = labels[i] == null ? '' : String(labels[i]);
+    const rawId = ids[i] == null ? '' : String(ids[i]);
+    zipped.push({ label, rawId });
+  }
+  return zipped;
+}
+
+// Row id states: null = no id submitted (new row), number = valid id,
+// NaN = junk id submitted (0, leading zeros, non-numeric) — rejected at validation,
+// never silently treated as a new row.
+function parsePackingItems(body) {
+  const rows = [];
+  for (const { label, rawId } of zipPackingRows(body)) {
+    const trimmed = label.trim();
+    if (trimmed === '') continue; // blank row: new row ignored; existing row leaves the kept set = deleted
+    const idText = rawId.trim();
+    let id = null;
+    if (idText !== '') {
+      // AUTOINCREMENT ids always start at 1; reject 0 and leading zeros.
+      id = /^[1-9]\d*$/.test(idText) ? Number(idText) : NaN;
+    }
+    rows.push({ id, label: trimmed });
+  }
+  return rows;
+}
+
+// Error re-render keeps every submitted row (raw ids included) so ids stay aligned
+// with labels and a validation failure never silently deletes items.
+function packingItemsFromBody(body) {
+  const items = [];
+  for (const { label, rawId } of zipPackingRows(body)) {
+    if (label.trim() === '' && rawId.trim() === '') continue;
+    items.push({ id: rawId, label });
+  }
+  return items;
+}
+
+// eventId === null means create: no items exist yet, so any submitted id is unknown.
+function validatePackingItems(db, rows, eventId) {
+  const errors = [];
+  if (rows.length > 50) {
+    errors.push('A travel event can have at most 50 packing items');
+  }
+  if (rows.some((r) => r.label.length > 200)) {
+    errors.push('Packing item labels must be 200 characters or fewer');
+  }
+  let unknown = false;
+  for (const r of rows) {
+    if (Number.isNaN(r.id)) {
+      unknown = true;
+      break;
+    }
+    if (r.id !== null) {
+      if (eventId === null) {
+        unknown = true;
+        break;
+      }
+      const exists = db
+        .prepare('SELECT 1 FROM event_packing_items WHERE id = ? AND event_id = ?')
+        .get(r.id, eventId);
+      if (!exists) {
+        unknown = true;
+        break;
+      }
+    }
+  }
+  if (unknown) {
+    errors.push('Unknown packing item');
+  }
+  return errors;
+}
+
+// Add = fill a blank row, edit = change the text, delete = clear the text.
+// The AND event_id = ? clause in the UPDATE is the cross-event tamper guard.
+// `kept` collects every row that survived this sync — submitted ids AND freshly
+// inserted ids — so the delete pass (which deliberately runs AFTER the inserts)
+// removes only existing rows that fell out of the submission (cleared text /
+// omitted row), never the rows just inserted.
+function syncPackingItems(db, eventId, rows) {
+  const kept = new Set();
+  for (const r of rows) {
+    // r.id is null (new row) or an integer >= 1 here: validatePackingItems already
+    // rejected NaN junk ids, so plain truthiness is safe.
+    if (r.id) {
+      db.prepare(
+        "UPDATE event_packing_items SET label = ?, updated_at = datetime('now') WHERE id = ? AND event_id = ?",
+      ).run(r.label, r.id, eventId);
+      kept.add(r.id);
+    } else {
+      const info = db
+        .prepare('INSERT INTO event_packing_items (event_id, label) VALUES (?, ?)')
+        .run(eventId, r.label);
+      kept.add(info.lastInsertRowid);
+    }
+  }
+  for (const row of db
+    .prepare('SELECT id FROM event_packing_items WHERE event_id = ?')
+    .all(eventId)) {
+    if (!kept.has(row.id)) {
+      db.prepare('DELETE FROM event_packing_items WHERE id = ?').run(row.id);
+    }
+  }
 }
 
 module.exports = router;

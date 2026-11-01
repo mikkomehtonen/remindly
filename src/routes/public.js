@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db/connection');
+const { csrfProtection } = require('../middleware/csrf');
 const {
   resolveDate,
   formatDate,
@@ -8,6 +9,22 @@ const {
   getRecurringDateRange,
 } = require('../utils/dateMath');
 const { VALID_CATEGORIES } = require('../config/categories');
+
+const KNOWN_ALIASES = ['today', 'tomorrow', 'this_week', 'next_week'];
+
+// Redirect-target allowlist for packing toggles: "/" or "/?alias=<known alias>",
+// built from KNOWN_ALIASES so the set stays single-sourced. Anything else
+// (protocol-relative URLs, admin paths, junk) falls back to "/".
+function parseReturnTo(value) {
+  if (typeof value !== 'string') return '/';
+  if (value === '/') return '/';
+  const aliasPrefix = '/?alias=';
+  if (value.startsWith(aliasPrefix)) {
+    const alias = value.slice(aliasPrefix.length);
+    if (KNOWN_ALIASES.includes(alias)) return `${aliasPrefix}${alias}`;
+  }
+  return '/';
+}
 
 /**
  * @swagger
@@ -28,10 +45,10 @@ const { VALID_CATEGORIES } = require('../config/categories');
  *       200:
  *         description: HTML page with events
  */
-router.get('/', (req, res) => {
+router.get('/', csrfProtection, (req, res) => {
   const alias = req.query.alias || 'today';
   let result;
-  if (['today', 'tomorrow', 'this_week', 'next_week'].includes(alias)) {
+  if (KNOWN_ALIASES.includes(alias)) {
     result = resolveDate(alias);
   } else {
     result = resolveDate('today');
@@ -43,18 +60,54 @@ router.get('/', (req, res) => {
 
   const db = getDb();
 
+  // Redirect target for packing toggles: only the four known aliases, so the
+  // value is always one the toggle route's allowlist accepts.
+  const returnTo = KNOWN_ALIASES.includes(alias) && alias !== 'today' ? `/?alias=${alias}` : '/';
+
   if (alias === 'next_week' || alias === 'this_week') {
     const events = queryEvents(db, result.startDate, result.endDate, null, true);
     return res.render('public/index', {
       date: `${formatDate(result.startDate)} to ${formatDate(result.endDate)}`,
       alias,
-      events,
+      events: attachPackingItems(db, events),
       isRange: true,
+      returnTo,
     });
   }
 
   const events = queryEvents(db, result.startDate, result.endDate);
-  res.render('public/index', { date: formatDate(result.startDate), alias, events, isRange: false });
+  res.render('public/index', {
+    date: formatDate(result.startDate),
+    alias,
+    events: attachPackingItems(db, events),
+    isRange: false,
+    returnTo,
+  });
+});
+
+router.post('/packing/items/:id/packed', csrfProtection, (req, res) => {
+  const itemId = Number(req.params.id);
+  if (!Number.isInteger(itemId) || itemId < 1) {
+    return res.status(404).render('error', { message: 'Packing item not found' });
+  }
+
+  const target = parsePacked(req.body.packed);
+  if (target === null) {
+    return res.status(400).render('error', { message: 'Invalid packed value' });
+  }
+
+  // Allowlist redirect: only "/" or "/?alias=<known alias>" (see parseReturnTo).
+  const returnTo = parseReturnTo(req.body.returnTo);
+
+  const db = getDb();
+  const info = db
+    .prepare("UPDATE event_packing_items SET packed = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(target, itemId);
+  if (info.changes === 0) {
+    return res.status(404).render('error', { message: 'Packing item not found' });
+  }
+
+  res.redirect(returnTo);
 });
 
 /**
@@ -177,7 +230,7 @@ router.get('/api/events', (req, res) => {
     return res.status(400).json({ error: 'Provide either date or alias, not both' });
   }
 
-  if (alias && !['today', 'tomorrow', 'this_week', 'next_week'].includes(alias)) {
+  if (alias && !KNOWN_ALIASES.includes(alias)) {
     return res
       .status(400)
       .json({ error: 'Invalid alias. Use today, tomorrow, this_week, or next_week' });
@@ -214,6 +267,40 @@ router.get('/api/events', (req, res) => {
     events,
   });
 });
+
+// HTML-only step in the GET / handler: batch-attach packing items to the already
+// sorted event list. One query regardless of event count (no N+1); SQL ordering
+// (packed ASC puts packed last, id ASC tie-break) is the single ordering rule —
+// never re-sort in JS. GET /api/events never calls this, so the JSON objects
+// keep their current keys.
+function attachPackingItems(db, events) {
+  for (const e of events) e.packingItems = [];
+  if (events.length === 0) return events;
+  const ids = events.map((e) => e.id);
+  const placeholders = ids.map(() => '?').join(', ');
+  const rows = db
+    .prepare(
+      `SELECT id, event_id, label, packed FROM event_packing_items
+       WHERE event_id IN (${placeholders}) ORDER BY packed ASC, id ASC`,
+    )
+    .all(...ids);
+  const byEvent = new Map(events.map((e) => [e.id, e.packingItems]));
+  for (const row of rows) {
+    const bucket = byEvent.get(row.event_id);
+    if (bucket) bucket.push(row);
+  }
+  return events;
+}
+
+// Hidden-default-plus-checkbox pair: unchecked submits "packed=0", checked submits
+// "packed=0&packed=1" — any "1" element means checked, "0"-only means unchecked.
+// Absent or all-junk values → null (400 at the call site); the DB CHECK re-guards {0,1}.
+function parsePacked(value) {
+  const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  if (values.some((v) => String(v) === '1')) return 1;
+  if (values.length > 0 && values.every((v) => String(v) === '0')) return 0;
+  return null;
+}
 
 function queryEvents(db, startDate, endDate, category, includeWeekday = false) {
   const range = getRecurringDateRange(startDate, endDate);

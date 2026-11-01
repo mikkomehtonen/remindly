@@ -37,6 +37,21 @@ const EVENTS_TABLE_COLUMNS = EVENTS_COLUMNS.map((c) => `${c.name.padEnd(12)} ${c
 );
 const EVENTS_COLUMN_NAMES = EVENTS_COLUMNS.map((c) => c.name);
 
+// Same shared-DDL convention as EVENTS_COLUMNS: one name/definition pair per column
+// drives the CREATE TABLE so fresh init and idempotent upgrade cannot drift.
+const PACKING_ITEM_COLUMNS = [
+  { name: 'id', def: 'INTEGER PRIMARY KEY AUTOINCREMENT' },
+  { name: 'event_id', def: 'INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE' },
+  { name: 'label', def: 'TEXT NOT NULL' },
+  { name: 'packed', def: 'INTEGER NOT NULL DEFAULT 0 CHECK (packed IN (0, 1))' },
+  { name: 'created_at', def: "TEXT NOT NULL DEFAULT (datetime('now'))" },
+  { name: 'updated_at', def: "TEXT NOT NULL DEFAULT (datetime('now'))" },
+];
+
+const PACKING_ITEM_TABLE_COLUMNS = PACKING_ITEM_COLUMNS.map((c) => `${c.name} ${c.def}`).join(
+  ',\n  ',
+);
+
 function initDb(options) {
   if (options != null && (typeof options !== 'object' || !options.file)) {
     throw new TypeError('initDb expects { file } or no arguments');
@@ -53,7 +68,18 @@ function initDb(options) {
   // Migration: rebuild CHECK constraint if any current category is missing
   migrateCategoryConstraint(db);
 
+  // Additive-only upgrade for packing items (no row copying): the FK target
+  // `events` must exist first, so this runs after the category migration.
+  ensurePackingItemsTable(db);
+
   return db;
+}
+
+// Idempotent: safe to run on every boot and in tests. CREATE TABLE/INDEX IF NOT
+// EXISTS is the whole migration — no user_version bookkeeping needed.
+function ensurePackingItemsTable(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS event_packing_items (${PACKING_ITEM_TABLE_COLUMNS})`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_packing_items_event ON event_packing_items(event_id)');
 }
 
 function migrateCategoryConstraint(db) {
@@ -82,16 +108,25 @@ function migrateCategoryConstraint(db) {
   // Rebuild the table with updated CHECK constraint.
   // Must be in a transaction for crash safety — losing events table mid-migration
   // would orphan data in events_new on next startup (initDb() creates a fresh empty table).
-  const migration = db.transaction(() => {
-    db.exec(`CREATE TABLE events_new (${EVENTS_TABLE_COLUMNS})`);
-    // Named columns (from EVENTS_COLUMN_NAMES) instead of `SELECT *`, so a legacy
-    // schema with the same column count but different order cannot shuffle values.
-    const cols = EVENTS_COLUMN_NAMES.join(', ');
-    db.exec(`INSERT INTO events_new (${cols}) SELECT ${cols} FROM events`);
-    db.exec('DROP TABLE events');
-    db.exec('ALTER TABLE events_new RENAME TO events');
-  });
-  migration();
+  // foreign_keys must be OFF during the DROP TABLE: with it ON, SQLite's implicit
+  // DELETE FROM on drop fires children's ON DELETE CASCADE and would wipe every
+  // event_packing_items row. The pragma is a no-op inside a transaction, so it is
+  // toggled outside the transaction (documented SQLite rebuild procedure).
+  db.pragma('foreign_keys = OFF');
+  try {
+    const migration = db.transaction(() => {
+      db.exec(`CREATE TABLE events_new (${EVENTS_TABLE_COLUMNS})`);
+      // Named columns (from EVENTS_COLUMN_NAMES) instead of `SELECT *`, so a legacy
+      // schema with the same column count but different order cannot shuffle values.
+      const cols = EVENTS_COLUMN_NAMES.join(', ');
+      db.exec(`INSERT INTO events_new (${cols}) SELECT ${cols} FROM events`);
+      db.exec('DROP TABLE events');
+      db.exec('ALTER TABLE events_new RENAME TO events');
+    });
+    migration();
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
 }
 
 function getDb() {
@@ -101,4 +136,10 @@ function getDb() {
   return db;
 }
 
-module.exports = { initDb, getDb, migrateCategoryConstraint, CATEGORY_CHECK };
+module.exports = {
+  initDb,
+  getDb,
+  migrateCategoryConstraint,
+  ensurePackingItemsTable,
+  CATEGORY_CHECK,
+};

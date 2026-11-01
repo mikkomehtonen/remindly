@@ -121,6 +121,27 @@
     .form-actions { margin-top: 24px; display: flex; gap: 12px; }
     .recurring-fields, .onetime-fields { display: none; }
     .recurring-fields.active, .onetime-fields.active { display: block; }
+    .packing-fields { display: none; }
+    .packing-fields.active { display: block; }
+    .packing-label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+      font-size: 0.8125rem;
+      color: #2d2926;
+      letter-spacing: 0.01em;
+    }
+    .packing-hint {
+      font-size: 0.8125rem;
+      color: #7a7470;
+      margin-bottom: 10px;
+    }
+    .packing-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
     .radio-group {
       display: flex;
       gap: 24px;
@@ -152,7 +173,12 @@
       document.querySelector('.recurring-fields').classList.toggle('active', isRecurring);
       document.querySelector('.onetime-fields').classList.toggle('active', !isRecurring);
     }
-    window.onload = function() { toggleEventType(); };
+    function togglePackingFields() {
+      var category = document.getElementById('category');
+      var isTravel = category && category.value === 'Travel';
+      document.querySelector('.packing-fields').classList.toggle('active', isTravel);
+    }
+    window.onload = function() { toggleEventType(); togglePackingFields(); };
   </script>
 </head>
 <body>
@@ -192,7 +218,7 @@
 
       <div class="form-group">
         <label for="category">Category *</label>
-        <select id="category" name="category" required>
+        <select id="category" name="category" required onchange="togglePackingFields()">
           <option value="">Select a category</option>
           <% categories.forEach(function(cat) { %>
             <option value="<%= cat %>" <%= (event && event.category === cat) ? 'selected' : '' %>><%= cat %></option>
@@ -233,6 +259,27 @@
           <label for="event_date">Event Date *</label>
           <input type="date" id="event_date" name="event_date"
             value="<%= event && event.event_date ? event.event_date : '' %>">
+        </div>
+      </div>
+
+      <div class="packing-fields<%= (event && event.category === 'Travel') ? ' active' : '' %>">
+        <div class="form-group">
+          <span class="packing-label">Packing items</span>
+          <p class="packing-hint">Add an item by filling a blank row, rename it by editing its text, remove it by clearing its text.</p>
+          <% (typeof packingItems === 'undefined' || !packingItems ? [] : packingItems).forEach(function(it) { %>
+            <div class="packing-row">
+              <% if (it.id !== '' && it.id !== null && it.id !== undefined) { %>
+                <input type="hidden" name="packing_item_ids[]" value="<%= it.id %>">
+              <% } %>
+              <input type="text" name="packing_items[]" maxlength="200"
+                value="<%= it.label %>" placeholder="e.g. Passport">
+            </div>
+          <% }) %>
+          <% for (var blank = 0; blank < 3; blank++) { %>
+            <div class="packing-row">
+              <input type="text" name="packing_items[]" maxlength="200" placeholder="Add a new packing item">
+            </div>
+          <% } %>
         </div>
       </div>
 

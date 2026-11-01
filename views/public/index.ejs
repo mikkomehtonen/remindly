@@ -120,6 +120,38 @@
       font-size: 1rem;
       line-height: 1.6;
     }
+    .packing-heading {
+      margin: 14px 0 4px;
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: #548466;
+    }
+    .packing-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .packing-item {
+      padding: 4px 0;
+    }
+    .packing-item form {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+    }
+    .packing-item.packed label {
+      color: #8a8f8c;
+      text-decoration: line-through;
+    }
+    .packing-update {
+      padding: 2px 8px;
+      font-size: 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #d9d3c8;
+      background: #f2efe8;
+      color: #548466;
+    }
   </style>
 </head>
 <body>
@@ -153,6 +185,10 @@
             <p><%= event.description %></p>
           <% } %>
           <span class="category"><%= event.category %></span>
+          <% if (event.category === 'Travel' && (event.packingItems || []).length > 0) { %>
+            <h4 class="packing-heading">Packing list</h4>
+            <%- include('../partials/packing-list', { items: event.packingItems, csrfToken, returnTo }) %>
+          <% } %>
         </div>
       <% }) %>
     <% } %>

@@ -1,0 +1,16 @@
+<ul class="packing-list">
+  <% items.forEach(function(it) { %>
+    <li class="packing-item<%= it.packed ? ' packed' : '' %>">
+      <form method="POST" action="/packing/items/<%= it.id %>/packed">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="packed" value="0" />
+        <label>
+          <input type="checkbox" name="packed" value="1" <%= it.packed ? 'checked' : '' %> onchange="this.form.submit()" />
+          <%= it.label %>
+        </label>
+        <input type="hidden" name="returnTo" value="<%= returnTo %>" />
+        <button type="submit" class="packing-update">Update</button>
+      </form>
+    </li>
+  <% }) %>
+</ul>

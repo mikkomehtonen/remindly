@@ -45,3 +45,19 @@
 **Takeaway**: Any commit after a Pass invalidates both reviewer verdicts and must pass `lint -> format -> test` plus a self-diff review before re-submitting. Guard generated/derived config (like DDL) with an independent assertion of the *full* expected output (e.g. `PRAGMA table_info` name:type pairs), not just the part you were refactoring.
 
 ---
+
+## Story code snippets can contain bugs — the AC tests are the contract
+**Date**: 2026-11-01
+**Area**: workflow
+**What happened**: Story 008 shipped a verbatim `syncPackingItems` snippet whose delete pass built `kept` only from *submitted* ids, so freshly INSERTed rows were deleted in the same transaction. Implementing the snippet as written passed lint but failed the story's own AC tests ("event_packing_items holds exactly 2 rows for the new event").
+**Takeaway**: Treat code inside a story as a starting point, not gospel — when it conflicts with an AC, the AC wins. Debug by isolating: if a standalone repro of the same DB ops passes but the route fails, add targeted `console.log` inside the suspect helper (was `syncPackingItems` called? did INSERT report `changes: 1`?) instead of rewriting whole handlers.
+
+---
+
+## Never `git checkout -- <file>` to undo temporary debug edits
+**Date**: 2026-11-01
+**Area**: workflow
+**What happened**: During the packing-list debug loop, `git checkout src/routes/admin.js` was used to revert temporary `console.log` edits — but the file also held the entire uncommitted feature implementation, which was wiped and had to be re-applied from scratch.
+**Takeaway**: Before any revert-style command on a file with uncommitted work, snapshot it first (`cp src/routes/x.js /tmp/opencode/x.js.bak`) and restore from the copy, or make debug edits via `node -e` patch scripts that restore from the backup. `git checkout --` reverts to last commit, not last-good state.
+
+---
