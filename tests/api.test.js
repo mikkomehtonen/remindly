@@ -1,7 +1,11 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { getDb, initDb } = require('../src/db/connection');
+const { VALID_CATEGORIES } = require('../src/config/categories');
+const { resolveDate } = require('../src/utils/dateMath');
 
 const BASE = 'http://localhost:9999';
 
@@ -71,6 +75,33 @@ async function loginAsAdmin() {
   return sessionCookies;
 }
 
+/**
+ * Month/day of "today" for recurring fixtures — resolveDate('today') uses the same
+ * Europe/Helsinki timezone the server resolves aliases in (AGENTS.md gotcha).
+ */
+function todayMonthDay() {
+  const { startDate } = resolveDate('today');
+  return { month: startDate.getMonth() + 1, day: startDate.getDate() };
+}
+
+/**
+ * Create a recurring event due today through the admin UI (session cookie + CSRF token).
+ */
+async function createRecurringEvent(cookies, { title, category }) {
+  const formPage = await request('/admin/events/new', { headers: { Cookie: cookies } });
+  const csrfToken = extractCsrf(formPage.body);
+  assert.ok(csrfToken, 'CSRF token must be present on the event form');
+  const { month, day } = todayMonthDay();
+  return request('/admin/events', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Cookie: cookies,
+    },
+    body: `title=${encodeURIComponent(title)}&category=${encodeURIComponent(category)}&is_recurring=1&month=${month}&day=${day}&_csrf=${csrfToken}`,
+  });
+}
+
 describe('Swagger spec', () => {
   // Use server from API integration describe below
   let swaggerSpec;
@@ -81,28 +112,31 @@ describe('Swagger spec', () => {
     swaggerSpec = require('../src/config/swagger');
   });
 
-  it('category enum in GET /api/events query param includes Other', () => {
+  // Exact-equality assertions against VALID_CATEGORIES: any category added to (or
+  // removed from) the shared list must appear in every spec location, in order —
+  // catches drift that per-category `includes` checks would miss.
+  it('GET /api/events category query param enum equals VALID_CATEGORIES', () => {
     const pathItem = swaggerSpec.paths['/api/events']?.get;
     assert.ok(pathItem, 'GET /api/events should be defined');
     const categoryParam = pathItem.parameters?.find((p) => p.name === 'category');
     assert.ok(categoryParam, 'category parameter should exist');
-    assert.ok(categoryParam.schema?.enum?.includes('Other'), 'category enum should include Other');
+    assert.deepStrictEqual(categoryParam.schema?.enum, VALID_CATEGORIES);
   });
 
-  it('Event schema category enum includes Other', () => {
+  it('Event schema category enum equals VALID_CATEGORIES', () => {
     const eventSchema = swaggerSpec.components?.schemas?.Event;
     assert.ok(eventSchema, 'Event schema should exist');
     const categoryProp = eventSchema.properties?.category;
     assert.ok(categoryProp, 'category property should exist');
-    assert.ok(categoryProp.enum?.includes('Other'), 'Event category enum should include Other');
+    assert.deepStrictEqual(categoryProp.enum, VALID_CATEGORIES);
   });
 
-  it('EventInput schema category enum includes Other', () => {
+  it('EventInput schema category enum equals VALID_CATEGORIES', () => {
     const eventInputSchema = swaggerSpec.components?.schemas?.EventInput;
     assert.ok(eventInputSchema, 'EventInput schema should exist');
     const categoryProp = eventInputSchema.properties?.category;
     assert.ok(categoryProp, 'category property should exist');
-    assert.ok(categoryProp.enum?.includes('Other'), 'EventInput category enum should include Other');
+    assert.deepStrictEqual(categoryProp.enum, VALID_CATEGORIES);
   });
 
   it('GET /health is documented as an unauthenticated Health endpoint', () => {
@@ -123,8 +157,19 @@ describe('Swagger spec', () => {
 
 describe('API integration', () => {
   let server;
+  const testDbFile = path.join(__dirname, '..', 'data', 'test-api.db');
+
+  function removeTestDbFile() {
+    for (const suffix of ['', '-wal', '-shm']) {
+      fs.rmSync(testDbFile + suffix, { force: true });
+    }
+  }
 
   before((_, done) => {
+    // Isolate the suite from the app's real data/remindly.db: src/index.js calls
+    // initDb() with no args, which falls back to DB_FILE. Must be set before require.
+    removeTestDbFile();
+    process.env.DB_FILE = testDbFile;
     process.env.PORT = '9999';
     process.env.API_KEYS = 'test-key-1,test-key-2';
     process.env.ADMIN_USERNAME = 'admin';
@@ -139,6 +184,11 @@ describe('API integration', () => {
 
   after(() => {
     server.close();
+    // Drop the whole throwaway DB instead of deleting fixture rows by title —
+    // title-based DELETEs could never distinguish test rows from a dev's real data.
+    const db = getDb();
+    if (db.open) db.close();
+    removeTestDbFile();
   });
 
   it('returns 200 without API key', async () => {
@@ -170,6 +220,17 @@ describe('API integration', () => {
       headers: { 'x-api-key': 'test-key-1' },
     });
     assert.strictEqual(res.status, 400);
+  });
+
+  it('returns 400 for invalid category listing all valid categories (Travel included)', async () => {
+    const res = await request('/api/events?category=Foo', {
+      headers: { 'x-api-key': 'test-key-1' },
+    });
+    assert.strictEqual(res.status, 400);
+    const json = JSON.parse(res.body);
+    // Message must be built from the shared VALID_CATEGORIES list — no hardcoded copy here.
+    assert.ok(json.error.includes(VALID_CATEGORIES.join(', ')));
+    assert.ok(json.error.includes('Travel'));
   });
 
   it('returns 200 with valid key and today alias', async () => {
@@ -297,43 +358,10 @@ describe('API integration', () => {
       );
     });
 
-    it('error message for invalid category lists all valid categories including Other', async () => {
-      const res = await request('/api/events?category=Foo', {
-        headers: { 'x-api-key': 'test-key-1' },
-      });
-      assert.strictEqual(res.status, 400);
-      const json = JSON.parse(res.body);
-      // Check that all categories (including Other) are listed in the error
-      assert.ok(json.error.includes('Birthday'));
-      assert.ok(json.error.includes('Name Day'));
-      assert.ok(json.error.includes('Flag Day'));
-      assert.ok(json.error.includes('Holiday'));
-      assert.ok(json.error.includes('Anniversary'));
-      assert.ok(json.error.includes('Other'));
-    });
-
     it('admin can create a recurring event with category "Other"', async () => {
-      // Get CSRF token for the new event form
-      const formPage = await request('/admin/events/new', {
-        headers: { Cookie: adminCookies },
-      });
-      const csrfToken = extractCsrf(formPage.body);
-
-      // Use Helsinki-today's month/day so the recurring event always matches alias=today queries
-      // (the server resolves date aliases in Europe/Helsinki timezone)
-      const helsinkiStr = new Date().toLocaleString('en-US', { timeZone: 'Europe/Helsinki' });
-      const helsinkiToday = new Date(helsinkiStr);
-      const month = helsinkiToday.getMonth() + 1;
-      const day = helsinkiToday.getDate();
-
-      // Create a recurring "Other" event
-      const createRes = await request('/admin/events', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Cookie: adminCookies,
-        },
-        body: `title=Graduation&category=Other&is_recurring=1&month=${month}&day=${day}&_csrf=${csrfToken}`,
+      const createRes = await createRecurringEvent(adminCookies, {
+        title: 'Graduation',
+        category: 'Other',
       });
       // Should redirect to dashboard
       assert.strictEqual(createRes.status, 302);
@@ -355,21 +383,13 @@ describe('API integration', () => {
       assert.strictEqual(res.status, 200);
       const json = JSON.parse(res.body);
       assert.ok(Array.isArray(json.events));
+      assert.ok(json.events.length > 0, 'Expected at least the Graduation event created above');
       json.events.forEach((e) => {
         assert.strictEqual(e.category, 'Other');
       });
     });
 
-    it('API query with invalid category returns 400 with valid categories including Other', async () => {
-      const res = await request('/api/events?category=Foo', {
-        headers: { 'x-api-key': 'test-key-1' },
-      });
-      assert.strictEqual(res.status, 400);
-      const json = JSON.parse(res.body);
-      assert.ok(json.error.includes('Other'));
-    });
-
-    it('API query with alias=today returns Other events alongside other categories', async () => {
+    it('API query with alias=today returns Other events', async () => {
       const res = await request('/api/events?alias=today', {
         headers: { 'x-api-key': 'test-key-1' },
       });
@@ -382,6 +402,118 @@ describe('API integration', () => {
       otherEvents.forEach((e) => {
         assert.strictEqual(e.category, 'Other');
       });
+    });
+  });
+
+  describe('Travel category', () => {
+    let adminCookies;
+
+    before(async () => {
+      adminCookies = await loginAsAdmin();
+      // Block-local fixtures: a non-Travel and a Travel recurring event due today, so
+      // every assertion below is self-sufficient and does not depend on other blocks
+      // or on events created by earlier tests.
+      const dayTripRes = await createRecurringEvent(adminCookies, {
+        title: 'Day Trip',
+        category: 'Anniversary',
+      });
+      assert.strictEqual(dayTripRes.status, 302, 'Day Trip fixture must be created');
+      const shuttleRes = await createRecurringEvent(adminCookies, {
+        title: 'Airport Shuttle',
+        category: 'Travel',
+      });
+      assert.strictEqual(shuttleRes.status, 302, 'Airport Shuttle fixture must be created');
+    });
+
+    it('event form includes "Travel" as the last selectable category option', async () => {
+      const formPage = await request('/admin/events/new', {
+        headers: { Cookie: adminCookies },
+      });
+      assert.strictEqual(formPage.status, 200);
+      // Options must render in VALID_CATEGORIES order with Travel last — expectation
+      // derived from the shared list, not from HTML string positions hardcoded here.
+      const positions = VALID_CATEGORIES.map(
+        (cat) => formPage.body.indexOf(`value="${cat}"`),
+      );
+      assert.ok(
+        positions.every((p) => p >= 0),
+        'every VALID_CATEGORIES option should render in the form',
+      );
+      positions.forEach((p, i) => {
+        if (i > 0) {
+          assert.ok(
+            p > positions[i - 1],
+            `${VALID_CATEGORIES[i]} must render after ${VALID_CATEGORIES[i - 1]}`,
+          );
+        }
+      });
+    });
+
+    it('admin dashboard category filter dropdown includes Travel', async () => {
+      const dashboard = await request('/admin', {
+        headers: { Cookie: adminCookies },
+      });
+      assert.strictEqual(dashboard.status, 200);
+      assert.ok(
+        dashboard.body.includes('value="Travel"'),
+        'Filter dropdown should have Travel option',
+      );
+    });
+
+    it('admin can create a recurring event with category "Travel"', async () => {
+      const createRes = await createRecurringEvent(adminCookies, {
+        title: 'Business Trip',
+        category: 'Travel',
+      });
+      assert.strictEqual(createRes.status, 302);
+      assert.strictEqual(createRes.headers.location, '/admin');
+
+      // Verify event appears on dashboard, and that the Travel category filter
+      // (behavioral check — lists only Travel-category rows) includes it.
+      const dashboard = await request('/admin', {
+        headers: { Cookie: adminCookies },
+      });
+      assert.strictEqual(dashboard.status, 200);
+      assert.ok(dashboard.body.includes('Business Trip'), 'Business Trip should be on dashboard');
+
+      const filtered = await request('/admin?category=Travel', {
+        headers: { Cookie: adminCookies },
+      });
+      assert.strictEqual(filtered.status, 200);
+      assert.ok(filtered.body.includes('Business Trip'), 'Travel filter should list Business Trip');
+      assert.ok(!filtered.body.includes('Day Trip'), 'Travel filter must exclude non-Travel rows');
+    });
+
+    it('API query with category=Travel returns only Travel events', async () => {
+      const res = await request('/api/events?category=Travel', {
+        headers: { 'x-api-key': 'test-key-1' },
+      });
+      assert.strictEqual(res.status, 200);
+      const json = JSON.parse(res.body);
+      assert.ok(Array.isArray(json.events));
+      assert.ok(json.events.length > 0, 'Expected at least the Airport Shuttle fixture');
+      json.events.forEach((e) => {
+        assert.strictEqual(e.category, 'Travel');
+      });
+    });
+
+    it('API query with alias=today returns Travel events alongside other categories', async () => {
+      const res = await request('/api/events?alias=today', {
+        headers: { 'x-api-key': 'test-key-1' },
+      });
+      assert.strictEqual(res.status, 200);
+      const json = JSON.parse(res.body);
+      assert.ok(Array.isArray(json.events));
+      const travelEvents = json.events.filter((e) => e.category === 'Travel');
+      assert.ok(travelEvents.length > 0, 'Expected at least one Travel event');
+      travelEvents.forEach((e) => {
+        assert.strictEqual(e.category, 'Travel');
+      });
+      const otherCategoryEvents = json.events.filter((e) => e.category !== 'Travel');
+      assert.ok(
+        otherCategoryEvents.length > 0,
+        'Expected non-Travel events rendered alongside Travel events',
+      );
     });
   });
 

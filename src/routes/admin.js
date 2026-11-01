@@ -20,7 +20,7 @@ const { VALID_CATEGORIES } = require('../config/categories');
  *           nullable: true
  *         category:
  *           type: string
- *           enum: [Birthday, Name Day, Flag Day, Holiday, Anniversary, Other]
+ *           # enum populated from VALID_CATEGORIES by src/config/swagger.js
  *         is_recurring:
  *           type: integer
  *           enum: [0, 1]
@@ -56,7 +56,7 @@ const { VALID_CATEGORIES } = require('../config/categories');
  *           type: string
  *         category:
  *           type: string
- *           enum: [Birthday, Name Day, Flag Day, Holiday, Anniversary, Other]
+ *           # enum populated from VALID_CATEGORIES by src/config/swagger.js
  *         is_recurring:
  *           type: string
  *           enum: ["0", "1"]

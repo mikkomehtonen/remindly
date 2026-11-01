@@ -38,4 +38,10 @@
 **What happened**: `npm test` failed immediately with `ERR_DLOPEN_FAILED` because `better_sqlite3.node` was compiled against Node module version 137 while the runtime required version 147. `npm install` reported "up to date" and did not rebuild the native binding; only `npm rebuild better-sqlite3` fixed it.
 **Takeaway**: If tests fail with a native module version mismatch for `better-sqlite3`, run `npm rebuild better-sqlite3` (or `npm rebuild`) before debugging test logic. This environment can switch Node versions between sessions, so the binding may be stale even when `node_modules` exists.
 
+---## Post-Pass nit refactors can fail the next review round — verify them like features
+**Date**: 2026-11-01
+**Area**: workflow
+**What happened**: Story 007 got a code-review Pass, then a follow-up commit addressing the reviewer's *non-blocking* notes (transcribing DDL into a structured `EVENTS_COLUMNS` list) introduced a real regression — the refactor dropped `INTEGER`/`TEXT` type keywords — which the next round flagged as a score-6 blocker and forced another full verify cycle.
+**Takeaway**: Any commit after a Pass invalidates both reviewer verdicts and must pass `lint -> format -> test` plus a self-diff review before re-submitting. Guard generated/derived config (like DDL) with an independent assertion of the *full* expected output (e.g. `PRAGMA table_info` name:type pairs), not just the part you were refactoring.
+
 ---

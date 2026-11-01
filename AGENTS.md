@@ -48,6 +48,7 @@ src/
   utils/dateMath.js     # alias resolver + recurring-event matcher
 tests/
   dateMath.test.js      # unit tests for date utilities
+  categories.test.js    # pins the exported VALID_CATEGORIES list
   api.test.js           # integration tests for API endpoints
   connection.test.js    # DB schema migration unit tests
 ```
@@ -62,6 +63,7 @@ tests/
 | `PORT` | Default `3000` |
 | `NODE_ENV` | `development` or `production` |
 | `LOGO_LINK_URL` | Optional. URL the header logo links to; if unset, logo is shown without a link |
+| `DB_FILE` | Optional. Overrides the SQLite database path (default `data/remindly.db`); the test suite uses it to stay off the real DB |
 
 `.env` files are gitignored. Copy `.env.example` to `.env` and fill in your values.
 
@@ -118,6 +120,8 @@ Run `lint -> format -> test` before pushing. CI should enforce the same order.
 - Admin credentials live **only** in env vars — never seed a users table or hardcode defaults.
 - API keys are env-only — no key management UI.
 - **`cookie-parser` is an explicit dependency** — added when replacing `csurf` with custom CSRF middleware.
-- **SQLite CHECK constraint migrations use rebuild-and-copy via `db.transaction()`.** SQLite does not support `ALTER TABLE … ALTER CONSTRAINT`. To change a CHECK, create a new table, `INSERT INTO … SELECT *`, drop the old table, and rename. Always wrap the DDL sequence in `db.transaction(() => { … })()` for crash safety — without it, a process crash between `DROP TABLE` and `ALTER TABLE … RENAME` orphans the data.
-- **Share DDL between table creation and migration.** When a migration rebuilds the same table with updated constraints, extract column definitions into a template literal constant (e.g., `EVENTS_TABLE_COLUMNS`) used by both `CREATE TABLE` and the migration's `CREATE TABLE events_new`. Otherwise the two copies will drift and the migration will silently produce a wrong schema.
+- **SQLite CHECK constraint migrations use rebuild-and-copy via `db.transaction()`.** SQLite does not support `ALTER TABLE … ALTER CONSTRAINT`. To change a CHECK, create a new table, copy rows with a **named column list** (not `SELECT *`, so legacy column order can't shuffle values), drop the old table, and rename. Always wrap the DDL sequence in `db.transaction(() => { … })()` for crash safety — without it, a process crash between `DROP TABLE` and `ALTER TABLE … RENAME` orphans the data.
+- **Share DDL between table creation and migration.** Column definitions are generated from the single `EVENTS_COLUMNS` name/def list in `src/db/connection.js` — `EVENTS_TABLE_COLUMNS` (DDL text) and `EVENTS_COLUMN_NAMES` (migration INSERT/SELECT) both derive from it. Add/rename columns only by editing `EVENTS_COLUMNS`.
+- **Pin generated-schema shape with `PRAGMA table_info`.** DDL derived from config (e.g., `CHECK` built from `VALID_CATEGORIES`) is only drift-proof if tests assert the full `name:type` column list, not just the CHECK clause text. Transcribing hand-written DDL into a generated column list once silently dropped `INTEGER`/`TEXT` on `month`/`day`/`event_date`; `EXPECTED_COLUMN_TYPES` in `tests/connection.test.js` now guards this on the fresh `initDb` schema and every rebuild path.
+- **Integration tests must never touch the real `data/remindly.db`.** Set `process.env.DB_FILE` to a throwaway file (e.g., `data/test-api.db`) **before** `require('../src/index')`, and tear down by deleting the file — never by `DELETE`-ing rows matched on title. A title-based cleanup in `api.test.js` once destroyed production data on every run.
 - **Time-zone-sensitive tests must match the server's timezone.** The server resolves date aliases (`today`, `tomorrow`, etc.) in `Europe/Helsinki`. Tests that compute month/day for recurring events must also use Helsinki timezone via `new Date().toLocaleString('en-US', { timeZone: 'Europe/Helsinki' })`, not `new Date()`.

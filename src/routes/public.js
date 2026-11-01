@@ -121,7 +121,7 @@ router.get('/health', (req, res) => {
  *         name: category
  *         schema:
  *           type: string
- *           enum: [Birthday, Name Day, Flag Day, Holiday, Anniversary, Other]
+ *           # enum populated from VALID_CATEGORIES by src/config/swagger.js
  *         description: Filter by event category
  *     responses:
  *       200:
