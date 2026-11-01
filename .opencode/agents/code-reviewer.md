@@ -7,7 +7,7 @@ description: >
   Output: Pass/Fail report with file:line findings committed to git.
 mode: subagent
 temperature: 0
-model: fireworks-ai/accounts/fireworks/models/glm-5p2
+model: pareto-llm/current
 variant: low
 tools:
   edit: false
