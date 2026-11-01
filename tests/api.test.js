@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { documentFromHtml, windowFromHtml } = require('./helpers/dom');
 const { getDb, initDb } = require('../src/db/connection');
 const { VALID_CATEGORIES } = require('../src/config/categories');
 const { resolveDate, formatDate } = require('../src/utils/dateMath');
@@ -50,6 +51,25 @@ function parseCookies(res) {
 function extractCsrf(body) {
   const match = body.match(/name="_csrf"\s+value="([^"]+)"/);
   return match ? match[1] : null;
+}
+
+/**
+ * Prove a served page ships a working auto-grow script: running it must define
+ * initPackingAutogrow AND leave window.onload calling it. A substring check on the
+ * raw HTML would also pass for a function that is defined but never invoked.
+ */
+async function assertAutoGrowWired(html) {
+  const window = await windowFromHtml(html);
+  assert.strictEqual(
+    typeof window.initPackingAutogrow,
+    'function',
+    'initPackingAutogrow must be defined by the inline script',
+  );
+  assert.match(
+    String(window.onload),
+    /initPackingAutogrow\(\)/,
+    'window.onload must invoke initPackingAutogrow',
+  );
 }
 
 /**
@@ -560,6 +580,13 @@ describe('API integration', () => {
         .all(eventId);
     }
 
+    // Parse the served HTML rather than substring-counting: the inline auto-grow
+    // script mentions name="packing_items[]" inside selector strings, so an
+    // attribute substring would over-count rows.
+    function countPackingInputs(html) {
+      return documentFromHtml(html).querySelectorAll('input[name="packing_items[]"]').length;
+    }
+
     async function csrfFor(pathUrl, cookies) {
       const page = await request(pathUrl, { headers: { Cookie: cookies } });
       const token = extractCsrf(page.body);
@@ -816,6 +843,146 @@ describe('API integration', () => {
       assert.strictEqual(
         getDb().prepare('SELECT category FROM events WHERE id = ?').get(eventId).category,
         'Travel',
+      );
+    });
+
+    it('creates an event from 6 submitted rows in one pass, in submission order and unpacked', async () => {
+      const res = await createTravelEvent('Autogrow Six Rows', {
+        items: ['Passport', 'Toothbrush', 'Charger', 'Rain shell', 'Snacks', 'Tent'],
+      });
+      assert.strictEqual(res.status, 302);
+      assert.strictEqual(res.headers.location, '/admin');
+
+      const items = itemsOf(eventIdByTitle('Autogrow Six Rows'));
+      assert.strictEqual(items.length, 6, 'every submitted row persisted');
+      assert.deepStrictEqual(
+        items.map((i) => i.label),
+        ['Passport', 'Toothbrush', 'Charger', 'Rain shell', 'Snacks', 'Tent'],
+      );
+      items.forEach((i) => assert.strictEqual(i.packed, 0, 'new items start unpacked'));
+    });
+
+    it('drops blank and whitespace-only rows from a larger submission', async () => {
+      const res = await createTravelEvent('Autogrow Blank Mix', { items: ['A', '', 'B', '   '] });
+      assert.strictEqual(res.status, 302);
+
+      const items = itemsOf(eventIdByTitle('Autogrow Blank Mix'));
+      assert.strictEqual(items.length, 2, 'blank rows produce no items');
+      assert.deepStrictEqual(items.map((i) => i.label), ['A', 'B']);
+    });
+
+    it('PUT keeps existing ids while growing to 5 rows with 3 trailing blanks', async () => {
+      const create = await createTravelEvent('Autogrow Grow Trip', { items: ['One', 'Two'] });
+      assert.strictEqual(create.status, 302);
+      const eventId = eventIdByTitle('Autogrow Grow Trip');
+      const before = itemsOf(eventId);
+      assert.strictEqual(before.length, 2);
+
+      const res = await putTravelEvent(eventId, {
+        title: 'Autogrow Grow Trip',
+        ids: [before[0].id, before[1].id],
+        items: ['One', 'Two', 'Three', 'Four', 'Five', '', '', ''],
+      });
+      assert.strictEqual(res.status, 302);
+      assert.strictEqual(res.headers.location, '/admin');
+
+      const after = itemsOf(eventId);
+      assert.strictEqual(after.length, 5, 'trailing blank rows produce no items');
+      assert.deepStrictEqual(
+        after.map((i) => i.label),
+        ['One', 'Two', 'Three', 'Four', 'Five'],
+      );
+      assert.strictEqual(after[0].id, before[0].id, 'first updated row keeps its id');
+      assert.strictEqual(after[1].id, before[1].id, 'second updated row keeps its id');
+    });
+
+    it('new-event page ships the auto-grow script and still renders 3 blank rows', async () => {
+      const page = await request('/admin/events/new', { headers: { Cookie: adminCookies } });
+      assert.strictEqual(page.status, 200);
+      await assertAutoGrowWired(page.body);
+      assert.strictEqual(
+        countPackingInputs(page.body),
+        3,
+        'initial render unchanged: exactly 3 blank packing rows',
+      );
+    });
+
+    it('edit page ships the auto-grow script with saved rows and their hidden ids', async () => {
+      const create = await createTravelEvent('Autogrow Edit Marker Trip', {
+        items: ['Passport', 'Visa', 'Camera', 'Charger'],
+      });
+      assert.strictEqual(create.status, 302);
+      const eventId = eventIdByTitle('Autogrow Edit Marker Trip');
+      const saved = itemsOf(eventId);
+      const page = await request(`/admin/events/${eventId}/edit`, {
+        headers: { Cookie: adminCookies },
+      });
+      assert.strictEqual(page.status, 200);
+      await assertAutoGrowWired(page.body);
+      for (const item of saved) {
+        assert.ok(
+          page.body.includes(`value="${item.label}"`),
+          `saved label "${item.label}" rendered as an input value`,
+        );
+        assert.ok(
+          page.body.includes(`name="packing_item_ids[]" value="${item.id}"`),
+          `hidden id ${item.id} rendered for its row`,
+        );
+      }
+      assert.strictEqual(
+        countPackingInputs(page.body),
+        saved.length + 3,
+        'saved rows plus the 3 blank rows',
+      );
+    });
+
+    it('rows grown in the served page submit and persist through the real form body', async () => {
+      const page = await request('/admin/events/new', { headers: { Cookie: adminCookies } });
+      const window = await windowFromHtml(page.body);
+      const form = window.document.querySelector('form');
+      form.querySelector('input[name="title"]').value = 'Autogrow Dom Roundtrip';
+      const category = form.querySelector('select[name="category"]');
+      category.value = 'Travel';
+      // The user path: choosing Travel fires onchange, which reveals the packing block.
+      category.dispatchEvent(new window.Event('change', { bubbles: true }));
+      assert.ok(
+        window.document.querySelector('.packing-fields').classList.contains('active'),
+        'packing block revealed before any typing starts',
+      );
+      const { month, day } = todayMonthDay();
+      form.querySelector('input[name="month"]').value = String(month);
+      form.querySelector('input[name="day"]').value = String(day);
+
+      const labels = ['Passport', 'Toothbrush', 'Charger', 'Rain shell', 'Snacks', 'Tent'];
+      for (const label of labels) {
+        const rows = window.document.querySelectorAll('.packing-fields .packing-row');
+        const input = rows[rows.length - 1].querySelector('input[name="packing_items[]"]');
+        input.value = label;
+        input.dispatchEvent(new window.Event('input', { bubbles: true }));
+      }
+      assert.strictEqual(
+        window.document.querySelectorAll('.packing-fields .packing-row').length,
+        labels.length + 3,
+        'auto-grow added one row per label typed in the served page',
+      );
+
+      const body = Array.from(new window.FormData(form).entries())
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+        .join('&');
+      const res = await request('/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: adminCookies },
+        body,
+      });
+      assert.strictEqual(res.status, 302);
+      assert.strictEqual(res.headers.location, '/admin');
+
+      const items = itemsOf(eventIdByTitle('Autogrow Dom Roundtrip'));
+      assert.strictEqual(items.length, 6, 'every grown row reached the server');
+      assert.deepStrictEqual(
+        items.map((i) => i.label),
+        labels,
+        'grown rows arrive in DOM order, trailing blanks dropped',
       );
     });
   });

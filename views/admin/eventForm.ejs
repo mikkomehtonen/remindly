@@ -178,7 +178,30 @@
       var isTravel = category && category.value === 'Travel';
       document.querySelector('.packing-fields').classList.toggle('active', isTravel);
     }
-    window.onload = function() { toggleEventType(); togglePackingFields(); };
+    function initPackingAutogrow() {
+      var container = document.querySelector('.packing-fields');
+      var MAX_ROWS = 50; // mirrors validatePackingItems in src/routes/admin.js (see also PACKING_MAX_ROWS below)
+      container.addEventListener('input', function(e) {
+        if (!e.target || e.target.name !== 'packing_items[]') return; // hidden id inputs never match
+        var rows = container.querySelectorAll('.packing-row');
+        var lastRow = rows[rows.length - 1];
+        if (!lastRow || rows.length >= MAX_ROWS) return; // cap reached: never render a 51st row
+        var lastInput = lastRow.querySelector('input[name="packing_items[]"]');
+        if (!lastInput || lastInput.value.trim() === '') return; // a blank trailing row already exists
+        var row = document.createElement('div');
+        row.className = 'packing-row';
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.name = 'packing_items[]';
+        input.maxLength = 200; // mirrors the 200-char label cap in validatePackingItems
+        input.placeholder = 'Add a new packing item';
+        row.appendChild(input);
+        // Rows must stay inside the form's .form-group wrapper: outside <form> a grown row
+        // is never submitted, and outside .form-group it loses the .form-group input styling.
+        lastRow.parentNode.appendChild(row);
+      });
+    }
+    window.onload = function() { toggleEventType(); togglePackingFields(); initPackingAutogrow(); };
   </script>
 </head>
 <body>
@@ -262,11 +285,19 @@
         </div>
       </div>
 
+      <%
+        var packingList = (typeof packingItems === 'undefined' || !packingItems) ? [] : packingItems;
+        // PACKING_MAX_ROWS mirrors the 50-item cap in validatePackingItems (src/routes/admin.js)
+        // and MAX_ROWS in the script above. Blanks are clamped so an event already near the cap
+        // can never render blank rows whose text would push the submission over it.
+        var PACKING_MAX_ROWS = 50;
+        var blankRows = Math.min(3, Math.max(0, PACKING_MAX_ROWS - packingList.length));
+      %>
       <div class="packing-fields<%= (event && event.category === 'Travel') ? ' active' : '' %>">
         <div class="form-group">
           <span class="packing-label">Packing items</span>
           <p class="packing-hint">Add an item by filling a blank row, rename it by editing its text, remove it by clearing its text.</p>
-          <% (typeof packingItems === 'undefined' || !packingItems ? [] : packingItems).forEach(function(it) { %>
+          <% packingList.forEach(function(it) { %>
             <div class="packing-row">
               <% if (it.id !== '' && it.id !== null && it.id !== undefined) { %>
                 <input type="hidden" name="packing_item_ids[]" value="<%= it.id %>">
@@ -275,7 +306,7 @@
                 value="<%= it.label %>" placeholder="e.g. Passport">
             </div>
           <% }) %>
-          <% for (var blank = 0; blank < 3; blank++) { %>
+          <% for (var blank = 0; blank < blankRows; blank++) { %>
             <div class="packing-row">
               <input type="text" name="packing_items[]" maxlength="200" placeholder="Add a new packing item">
             </div>

@@ -61,3 +61,11 @@
 **Takeaway**: Before any revert-style command on a file with uncommitted work, snapshot it first (`cp src/routes/x.js /tmp/opencode/x.js.bak`) and restore from the copy, or make debug edits via `node -e` patch scripts that restore from the backup. `git checkout --` reverts to last commit, not last-good state.
 
 ---
+
+## A reviewer fix may have to reach outside the story's stated scope — split AC-breaking from AC-safe demands
+**Date**: 2026-11-01
+**Area**: workflow
+**What happened**: Story 009 prescribed a "client-only change in the existing inline `<script>`" with an unconditional 3-blank-row loop and an append guard counting `.packing-row` elements. That left a real hole: editing a Travel event with ≥48 saved items rendered 51+ rows, so filling a blank row submitted 51 labels and `validatePackingItems` rejected the whole save. The code-reviewer demanded three fixes; counting non-blank labels for the append decision would have broken the story AC "47 saved + 3 blanks → row count stays 50", while clamping blank rows to the 50-row ceiling was AC-safe and closed the hole.
+**Takeaway**: When review feedback collides with the story, implement the AC-safe half, keep every AC green, and in the re-review prompt name the refused demand plus the exact AC it would break — the reviewer accepts on evidence. Expect the story file to become the stale artifact (acceptance-reviewer records it under "Story Gaps"), so mirror the divergence into AGENTS.md rather than editing the story.
+
+---

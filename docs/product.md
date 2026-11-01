@@ -12,6 +12,7 @@ A lightweight event reminder app for tracking birthdays, name days, holidays, an
 - **Public Event API** — The `/api/events` endpoint is publicly accessible without an API key ([story](stories/006-public-event-api/story.md))
 - **"Travel" Event Category** — New "Travel" category added to the predefined category list, allowing admins to file trips and commutes that don't match Birthday, Name Day, Flag Day, Holiday, Anniversary, or Other; the DB `CHECK` constraint is now derived from the shared `VALID_CATEGORIES` list so category changes no longer require DDL edits ([story](stories/007-add-travel-category/story.md))
 - **Travel Packing List** — Admins attach a list of things to take along to a Travel event; on the public page each item renders as a checkbox, ticked items move to the end of the list and are shown faded and struck-through, and unticking puts them back. Items are added, renamed, or removed from the event form; packed state is stored server-side and shared by all visitors ([story](stories/008-travel-packing-list/story.md))
+- **Packing List Auto-Grow** — in the admin event form, typing in the last empty packing-item row of a Travel event automatically appends a new empty text field, so lists of any size up to the existing 50-item cap can be authored without saving and reopening the event ([story](stories/009-packing-list-autogrow/story.md))
 
 ## Non-Goals
 

@@ -38,19 +38,25 @@ src/
   routes/
     public.js           # GET / (HTML), GET /api/events (JSON)
     admin.js            # login/logout + event CRUD
-  views/
-    layout.ejs
-    public/index.ejs
-    admin/login.ejs
-    admin/dashboard.ejs
-    admin/eventForm.ejs
-    error.ejs
   utils/dateMath.js     # alias resolver + recurring-event matcher
+views/                  # app.set('views') points at ./views — NOT src/views
+  layout.ejs
+  error.ejs
+  partials/
+    favicon.ejs
+    logo.ejs
+    packing-list.ejs
+  public/index.ejs
+  admin/login.ejs
+  admin/dashboard.ejs
+  admin/eventForm.ejs   # inline ES5 script: field toggles + packing auto-grow
 tests/
   dateMath.test.js      # unit tests for date utilities
   categories.test.js    # pins the exported VALID_CATEGORIES list
   api.test.js           # integration tests for API endpoints
   connection.test.js    # DB schema migration unit tests
+  packingAutogrow.test.js # jsdom unit tests for the admin form's packing auto-grow
+  helpers/dom.js        # shared jsdom bootstrap (parse markup / run a view's scripts)
 ```
 
 ## Environment Variables (all required at runtime)
@@ -103,7 +109,7 @@ tests/
 | **ESLint** | JS source (`src/`) | Flat config with `eslint-config-prettier` |
 | **Prettier** | JS source (`src/`) | Single source of truth for formatting; run before commits |
 | **lint-staged** | Pre-commit | ESLint + Prettier on staged JS files |
-| **Node test runner** | `tests/` | Built-in `node --test`, no external test framework |
+| **Node test runner** | `tests/` | Built-in `node --test`, no external test framework; `jsdom` (devDep) drives DOM-level view tests |
 | **Swagger UI** | `/docs` | API documentation via `swagger-ui-express`, spec in `src/config/swagger.js` |
 
 **Commands:**
@@ -133,3 +139,5 @@ Run `lint -> format -> test` before pushing. CI should enforce the same order.
 - **Time-zone-sensitive tests must match the server's timezone.** The server resolves date aliases (`today`, `tomorrow`, etc.) in `Europe/Helsinki`. Tests that compute month/day for recurring events must also use Helsinki timezone via `new Date().toLocaleString('en-US', { timeZone: 'Europe/Helsinki' })`, not `new Date()`.
 - **`GET /` now sets a `connect.sid` cookie for anonymous visitors** (csrfProtection runs there to seed the CSRF token for packing forms). A new `Set-Cookie` on `/` responses is expected behavior, not a regression.
 - **Packing item order is one SQL rule, never JS re-sorting:** public pages/toggle re-render use `ORDER BY packed ASC, id ASC` (packed last), the admin form uses `ORDER BY id ASC`. Tie-breaking on `id` is deliberate — `datetime('now')` has one-second resolution, so ordering by pack time makes HTML-order assertions flaky.
+- **Packing caps are mirrored in three places.** The 50-item cap exists as `validatePackingItems` (server), `MAX_ROWS` in the `eventForm.ejs` inline script (auto-grow append guard), and `PACKING_MAX_ROWS` in the same view's EJS, which clamps the 3 blank rows so an event near the cap never renders blanks that would push a submission over 50. The 200-char label cap is mirrored by `maxlength="200"` in both blank-row renderers (the EJS loop and `initPackingAutogrow`). Change all of them together; `tests/packingAutogrow.test.js` pins the appended row's attributes to the server-rendered blank row, and its cap tests pin the 50-row ceiling from both sides.
+- **Verify inline view scripts by running them, never by substring-matching.** ESLint/Prettier skip `.ejs`, so the admin form's inline ES5 script is guarded only by tests: parse the served HTML with `tests/helpers/dom.js` (`windowFromHtml` uses `runScripts: 'dangerously'` and awaits window `load` — jsdom's `readyState` flips to `complete` only in a microtask after construction). Assert `typeof window.initPackingAutogrow === 'function'` and `String(window.onload)`; a `body.includes('initPackingAutogrow')` marker also passes for a function that is defined but never called. Substring counts of markup are unsafe for the same reason — the script contains `name="packing_items[]"` inside selector strings, so row counts need a parsed DOM (`documentFromHtml`), not `body.split(...)`.
